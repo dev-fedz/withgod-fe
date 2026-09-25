@@ -1,19 +1,31 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Home, BookOpen, Edit3, Compass, User as UserIcon, Languages, Scroll } from 'lucide-react';
+import { Home, BookOpen, Edit3, Compass, User as UserIcon, Languages, Scroll, Calendar, Flame } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 
 export const BottomNav: React.FC = () => {
   const router = useRouter();
+  const { user } = useApp();
 
-  const navItems = [
-    { label: 'Home', href: '/', icon: Home },
-    { label: 'Bible', href: '/bible', icon: BookOpen },
-    { label: 'Torah', href: '/torah', icon: Scroll },
-    { label: 'Devotions', href: '/devotions', icon: Edit3 },
-    { label: 'Hebrew', href: '/hebrew', icon: Languages },
-    { label: 'Profile', href: '/profile', icon: UserIcon },
-  ];
+  const navItems = user
+    ? [
+        { label: 'Home', href: '/', icon: Home },
+        { label: 'Bible', href: '/bible', icon: BookOpen },
+        { label: 'Torah', href: '/torah', icon: Scroll },
+        { label: 'Feasts', href: '/feasts', icon: Flame },
+        { label: 'Calendar', href: '/calendar', icon: Calendar },
+        { label: 'Devotions', href: '/devotions', icon: Edit3 },
+        { label: 'Profile', href: '/profile', icon: UserIcon },
+      ]
+    : [
+        { label: 'Home', href: '/', icon: Home },
+        { label: 'Bible', href: '/bible', icon: BookOpen },
+        { label: 'Torah', href: '/torah', icon: Scroll },
+        { label: 'Feasts', href: '/feasts', icon: Flame },
+        { label: 'Hebrew', href: '/hebrew', icon: Languages },
+        { label: 'Profile', href: '/profile', icon: UserIcon },
+      ];
 
   const handleNavClick = (e: React.MouseEvent, href: string) => {
     if (router.pathname === href) {

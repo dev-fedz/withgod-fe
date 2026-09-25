@@ -59,7 +59,14 @@ class ApiClient {
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));
-      const errorMsg = errorBody.error?.detail || errorBody.detail || errorBody.error || response.statusText;
+      let errorMsg = errorBody.error?.detail || errorBody.detail || errorBody.error;
+      if (!errorMsg && typeof errorBody === 'object' && errorBody !== null) {
+        const messages = Object.entries(errorBody)
+          .map(([key, val]) => `${key}: ${Array.isArray(val) ? val.join(', ') : val}`)
+          .join(' | ');
+        if (messages) errorMsg = messages;
+      }
+      errorMsg = errorMsg || response.statusText || 'An error occurred';
       throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
     }
 
@@ -117,6 +124,59 @@ class ApiClient {
 
   updatePreferences(data: any) {
     return this.request('/users/preferences/', { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  // User Management APIs
+  getUserAccounts(params?: { search?: string; role_id?: string; is_active?: boolean }) {
+    const searchParams = new URLSearchParams();
+    if (params?.search) searchParams.append('search', params.search);
+    if (params?.role_id) searchParams.append('role_id', params.role_id);
+    if (params?.is_active !== undefined) searchParams.append('is_active', String(params.is_active));
+    const qs = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return this.request(`/users/accounts/${qs}`);
+  }
+
+  getUserAccount(userId: string) {
+    return this.request(`/users/accounts/${userId}/`);
+  }
+
+  createUserAccount(data: any) {
+    return this.request('/users/accounts/', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  updateUserAccount(userId: string, data: any) {
+    return this.request(`/users/accounts/${userId}/`, { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  deleteUserAccount(userId: string) {
+    return this.request(`/users/accounts/${userId}/`, { method: 'DELETE' });
+  }
+
+  getUserRoles(params?: { search?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.search) searchParams.append('search', params.search);
+    const qs = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return this.request(`/users/roles/${qs}`);
+  }
+
+  getUserRole(roleId: string) {
+    return this.request(`/users/roles/${roleId}/`);
+  }
+
+  createUserRole(data: any) {
+    return this.request('/users/roles/', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  updateUserRole(roleId: string, data: any) {
+    return this.request(`/users/roles/${roleId}/`, { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  deleteUserRole(roleId: string) {
+    return this.request(`/users/roles/${roleId}/`, { method: 'DELETE' });
+  }
+
+  getModules() {
+    return this.request('/users/modules/');
   }
 
   // Bible APIs
@@ -239,6 +299,21 @@ class ApiClient {
   }
 
   // Events APIs
+  getEvents(params?: { start_date?: string; end_date?: string; year?: number; month?: number; search?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.start_date) searchParams.append('start_date', params.start_date);
+    if (params?.end_date) searchParams.append('end_date', params.end_date);
+    if (params?.year) searchParams.append('year', params.year.toString());
+    if (params?.month) searchParams.append('month', params.month.toString());
+    if (params?.search) searchParams.append('search', params.search);
+    const qs = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return this.request(`/events/${qs}`);
+  }
+
+  getEvent(id: string) {
+    return this.request(`/events/${id}/`);
+  }
+
   getUpcomingEvents() {
     return this.request('/events/upcoming/');
   }
@@ -257,6 +332,18 @@ class ApiClient {
 
   deleteEvent(id: string) {
     return this.request(`/events/admin/${id}/`, { method: 'DELETE' });
+  }
+
+  getEventNotifications() {
+    return this.request('/events/notifications/');
+  }
+
+  markNotificationRead(notificationId: string) {
+    return this.request(`/events/notifications/${notificationId}/read/`, { method: 'POST' });
+  }
+
+  markAllNotificationsRead() {
+    return this.request('/events/notifications/read-all/', { method: 'POST' });
   }
 
   // Verse of the Day APIs

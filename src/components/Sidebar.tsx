@@ -1,25 +1,37 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { BookOpen, Home, Edit3, Compass, Bookmark, Settings, Shield, Languages, Scroll } from 'lucide-react';
+import { BookOpen, Home, Edit3, Compass, Bookmark, Settings, Shield, Languages, Scroll, Calendar, Users, Flame } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export const Sidebar: React.FC = () => {
   const router = useRouter();
   const { user } = useApp();
 
-  const navItems = [
-    { label: 'Home', href: '/', icon: Home },
-    { label: 'Bible', href: '/bible', icon: BookOpen },
-    { label: 'Torah Portion', href: '/torah', icon: Scroll },
-    { label: 'Devotions', href: '/devotions', icon: Edit3 },
-    { label: 'Insights', href: '/study', icon: Bookmark },
-    { label: 'Learn Hebrew', href: '/hebrew', icon: Languages },
-    { label: 'Discover', href: '/discover', icon: Compass },
-    { label: 'Profile', href: '/profile', icon: Settings },
-  ];
+  const navItems = user
+    ? [
+        { label: 'Home', href: '/', icon: Home },
+        { label: 'Bible', href: '/bible', icon: BookOpen },
+        { label: 'Torah Portion', href: '/torah', icon: Scroll },
+        { label: 'Biblical Feasts', href: '/feasts', icon: Flame },
+        { label: 'Calendar', href: '/calendar', icon: Calendar },
+        { label: 'Devotions', href: '/devotions', icon: Edit3 },
+        { label: 'Insights', href: '/study', icon: Bookmark },
+        { label: 'Learn Hebrew', href: '/hebrew', icon: Languages },
+        { label: 'Discover', href: '/discover', icon: Compass },
+        { label: 'Profile', href: '/profile', icon: Settings },
+      ]
+    : [
+        { label: 'Home', href: '/', icon: Home },
+        { label: 'Bible', href: '/bible', icon: BookOpen },
+        { label: 'Torah Portion', href: '/torah', icon: Scroll },
+        { label: 'Biblical Feasts', href: '/feasts', icon: Flame },
+        { label: 'Learn Hebrew', href: '/hebrew', icon: Languages },
+        { label: 'Profile', href: '/profile', icon: Settings },
+      ];
 
-  if (user?.is_staff) {
+  if (user?.is_staff || user?.can_manage_users) {
+    navItems.push({ label: 'User Roles', href: '/user-management', icon: Users });
     navItems.push({ label: 'Admin', href: '/admin', icon: Shield });
   }
 

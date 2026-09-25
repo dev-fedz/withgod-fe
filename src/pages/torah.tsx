@@ -144,7 +144,7 @@ export default function TorahPage() {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8 space-y-10">
         {/* Hero Header */}
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-stone-900 via-stone-850 to-amber-950 text-white p-6 sm:p-10 shadow-xl border border-stone-800">
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-stone-900 via-stone-900 to-amber-950 text-white p-6 sm:p-10 shadow-xl border border-stone-800">
           <div className="relative z-10 max-w-2xl space-y-3">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 backdrop-blur-md">
               <Scroll className="w-3.5 h-3.5" />
@@ -196,7 +196,7 @@ export default function TorahPage() {
                 className={`px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
                   selectedPortionId === thisWeek.id
                     ? 'bg-amber-600 text-white shadow-md'
-                    : 'bg-white dark:bg-stone-800 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800/80 hover:bg-amber-50 dark:hover:bg-stone-750'
+                    : 'bg-white dark:bg-stone-800 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800/80 hover:bg-amber-50 dark:hover:bg-stone-700'
                 }`}
               >
                 <BookOpen className="w-4 h-4" />
@@ -277,19 +277,25 @@ export default function TorahPage() {
           </div>
 
           {/* 3 Triad Reading Tabs */}
-          <div className="flex border-b border-stone-200 dark:border-stone-800 bg-stone-100/60 dark:bg-stone-850 overflow-x-auto">
+          <div className="flex border-b border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-950 p-2 gap-2 overflow-x-auto">
             <button
               type="button"
               onClick={() => setActiveReadingTab('torah')}
-              className={`flex-1 py-3.5 px-4 text-xs font-semibold flex items-center justify-center gap-2 border-b-2 transition-all whitespace-nowrap ${
+              className={`flex-1 py-3 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
                 activeReadingTab === 'torah'
-                  ? 'border-amber-600 text-amber-700 dark:text-amber-400 bg-white dark:bg-stone-900 shadow-sm'
-                  : 'border-transparent text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+                  ? 'bg-white dark:bg-stone-800 text-amber-700 dark:text-amber-400 shadow-md border border-amber-500/40 dark:border-amber-500/50 ring-1 ring-amber-500/20'
+                  : 'bg-stone-200/70 dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200 dark:hover:bg-stone-800 border border-transparent dark:border-stone-800'
               }`}
             >
-              <span>📜</span>
+              <span className="text-sm">📜</span>
               <span>Torah (Law)</span>
-              <span className="text-[11px] opacity-75 font-mono">
+              <span
+                className={`text-[11px] font-mono px-2 py-0.5 rounded-md ${
+                  activeReadingTab === 'torah'
+                    ? 'bg-amber-500/20 dark:bg-amber-400/20 text-amber-900 dark:text-amber-200 font-bold border border-amber-500/30'
+                    : 'bg-stone-300/70 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-300/60 dark:border-stone-700'
+                }`}
+              >
                 {readingsData?.readings?.torah?.reference || selectedPortionData?.torah_ref}
               </span>
             </button>
@@ -297,15 +303,21 @@ export default function TorahPage() {
             <button
               type="button"
               onClick={() => setActiveReadingTab('prophet')}
-              className={`flex-1 py-3.5 px-4 text-xs font-semibold flex items-center justify-center gap-2 border-b-2 transition-all whitespace-nowrap ${
+              className={`flex-1 py-3 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
                 activeReadingTab === 'prophet'
-                  ? 'border-blue-600 text-blue-700 dark:text-blue-400 bg-white dark:bg-stone-900 shadow-sm'
-                  : 'border-transparent text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+                  ? 'bg-white dark:bg-stone-800 text-blue-700 dark:text-blue-400 shadow-md border border-blue-500/40 dark:border-blue-500/50 ring-1 ring-blue-500/20'
+                  : 'bg-stone-200/70 dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200 dark:hover:bg-stone-800 border border-transparent dark:border-stone-800'
               }`}
             >
-              <span>🎺</span>
+              <span className="text-sm">🎺</span>
               <span>Prophets (Haftarah)</span>
-              <span className="text-[11px] opacity-75 font-mono">
+              <span
+                className={`text-[11px] font-mono px-2 py-0.5 rounded-md ${
+                  activeReadingTab === 'prophet'
+                    ? 'bg-blue-500/20 dark:bg-blue-400/20 text-blue-900 dark:text-blue-200 font-bold border border-blue-500/30'
+                    : 'bg-stone-300/70 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-300/60 dark:border-stone-700'
+                }`}
+              >
                 {readingsData?.readings?.prophet?.reference || selectedPortionData?.prophet_ref}
               </span>
             </button>
@@ -313,15 +325,21 @@ export default function TorahPage() {
             <button
               type="button"
               onClick={() => setActiveReadingTab('gospel')}
-              className={`flex-1 py-3.5 px-4 text-xs font-semibold flex items-center justify-center gap-2 border-b-2 transition-all whitespace-nowrap ${
+              className={`flex-1 py-3 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
                 activeReadingTab === 'gospel'
-                  ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-stone-900 shadow-sm'
-                  : 'border-transparent text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+                  ? 'bg-white dark:bg-stone-800 text-emerald-700 dark:text-emerald-400 shadow-md border border-emerald-500/40 dark:border-emerald-500/50 ring-1 ring-emerald-500/20'
+                  : 'bg-stone-200/70 dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200 dark:hover:bg-stone-800 border border-transparent dark:border-stone-800'
               }`}
             >
-              <span>✝️</span>
+              <span className="text-sm">✝️</span>
               <span>Gospel (B'rit Chadashah)</span>
-              <span className="text-[11px] opacity-75 font-mono">
+              <span
+                className={`text-[11px] font-mono px-2 py-0.5 rounded-md ${
+                  activeReadingTab === 'gospel'
+                    ? 'bg-emerald-500/20 dark:bg-emerald-400/20 text-emerald-900 dark:text-emerald-200 font-bold border border-emerald-500/30'
+                    : 'bg-stone-300/70 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-300/60 dark:border-stone-700'
+                }`}
+              >
                 {readingsData?.readings?.gospel?.reference || selectedPortionData?.gospel_ref}
               </span>
             </button>

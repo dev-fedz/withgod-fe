@@ -15,6 +15,7 @@ import {
   Download,
   Trash2,
   Edit2,
+  LogIn,
 } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
 import { Modal } from '../components/Modal';
@@ -66,6 +67,7 @@ export default function BibleReader() {
   const [selectedModalBook, setSelectedModalBook] = useState(currentBook);
   const [isInsightModalOpen, setIsInsightModalOpen] = useState(false);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+  const [isLoginPromptModalOpen, setIsLoginPromptModalOpen] = useState(false);
 
   // Sync selectedModalBook whenever modal opens or currentBook changes
   useEffect(() => {
@@ -162,6 +164,10 @@ export default function BibleReader() {
   }, [currentVersion, currentBook, currentChapter, user, router.asPath, reloadKey]);
 
   const toggleVerseSelection = (verseNumber: number) => {
+    if (!user) {
+      setIsLoginPromptModalOpen(true);
+      return;
+    }
     if (selectedVerses.includes(verseNumber)) {
       setSelectedVerses(selectedVerses.filter((v) => v !== verseNumber));
     } else {
@@ -171,7 +177,7 @@ export default function BibleReader() {
 
   const handleApplyHighlight = async (colorId: string) => {
     if (!user) {
-      router.push('/profile');
+      setIsLoginPromptModalOpen(true);
       return;
     }
     if (selectedVerses.length === 0) return;
@@ -235,7 +241,7 @@ export default function BibleReader() {
   // Open User Insights modal (Note & Insights are one)
   const handleOpenUserInsight = (verseNum?: number) => {
     if (!user) {
-      router.push('/profile');
+      setIsLoginPromptModalOpen(true);
       return;
     }
     const targetVerse = verseNum || (selectedVerses.length > 0 ? selectedVerses[0] : 1);
@@ -317,6 +323,10 @@ export default function BibleReader() {
   };
 
   const handleAddToDevotion = () => {
+    if (!user) {
+      setIsLoginPromptModalOpen(true);
+      return;
+    }
     if (selectedVerses.length === 0 || !chapterData) return;
     const start = selectedVerses[0];
     const end = selectedVerses[selectedVerses.length - 1];
@@ -992,6 +1002,51 @@ export default function BibleReader() {
               className="px-4 py-2 rounded-xl text-xs font-semibold text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800"
             >
               Close
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Sign In Required Prompt Modal */}
+      <Modal
+        isOpen={isLoginPromptModalOpen}
+        onClose={() => setIsLoginPromptModalOpen(false)}
+        title="Sign In Required"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-5">
+          <div className="flex flex-col items-center text-center space-y-3 pt-2">
+            <div className="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-inner">
+              <LogIn className="w-7 h-7" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">
+                Unlock Scripture Interaction
+              </h3>
+              <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed max-w-xs mx-auto">
+                Sign in or create an account to highlight verses, write personal insights, compare translations, and add scripture to your devotion journal.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-stone-100 dark:border-stone-800">
+            <button
+              type="button"
+              onClick={() => setIsLoginPromptModalOpen(false)}
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsLoginPromptModalOpen(false);
+                router.push('/profile');
+              }}
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm hover:shadow transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Go to Sign In</span>
             </button>
           </div>
         </div>

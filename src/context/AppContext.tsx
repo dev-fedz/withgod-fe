@@ -14,6 +14,12 @@ export interface User {
   last_name: string;
   full_name: string;
   is_staff: boolean;
+  is_superuser?: boolean;
+  can_manage_calendar?: boolean;
+  can_manage_users?: boolean;
+  role_names?: string[];
+  role_ids?: string[];
+  permissions_list?: string[];
   profile?: {
     avatar_url?: string;
     bio?: string;
