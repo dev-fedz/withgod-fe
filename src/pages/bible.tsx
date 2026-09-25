@@ -301,14 +301,14 @@ export default function BibleReader() {
 
   const handleOpenCompare = async () => {
     if (selectedVerses.length === 0) return;
-    const verseNum = selectedVerses[0];
+    const sortedVerses = [...selectedVerses].sort((a, b) => a - b);
     try {
       // Use all installed versions except the currently active one
       const otherVersions = versions
         .map((v: any) => v.id)
         .filter((id: string) => id.toUpperCase() !== currentVersion.toUpperCase());
       const versionsToCompare = otherVersions.length > 0 ? otherVersions : ['KJV'];
-      const res = await api.compareVerses(versionsToCompare, currentBook, currentChapter, verseNum);
+      const res = await api.compareVerses(versionsToCompare, currentBook, currentChapter, sortedVerses);
       setCompareData(res);
       setIsCompareModalOpen(true);
     } catch (err) {
@@ -780,24 +780,42 @@ export default function BibleReader() {
       </Modal>
 
       {/* Comparison Modal */}
-      <Modal isOpen={isCompareModalOpen} onClose={() => setIsCompareModalOpen(false)} title="Translation Comparison" maxWidth="max-w-2xl">
+      <Modal
+        isOpen={isCompareModalOpen}
+        onClose={() => setIsCompareModalOpen(false)}
+        title={`Compare Translations (${(() => {
+          if (selectedVerses.length === 0) return '';
+          const sorted = [...selectedVerses].sort((a, b) => a - b);
+          if (sorted.length === 1) return `${currentBook} ${currentChapter}:${sorted[0]}`;
+          const isConsecutive = sorted.every((v, i) => i === 0 || v === sorted[i - 1] + 1);
+          const range = isConsecutive ? `${sorted[0]}-${sorted[sorted.length - 1]}` : sorted.join(', ');
+          return `${currentBook} ${currentChapter}:${range}`;
+        })()})`}
+        maxWidth="max-w-2xl"
+      >
         <div className="space-y-4">
           {compareData.length > 0 ? (
             <div className="space-y-3">
-              {compareData.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-800 space-y-2"
-                >
-                  <div className="flex items-center justify-between text-xs font-bold text-amber-600 dark:text-amber-400">
-                    <span>{item.version_name} ({item.version_id})</span>
-                    <span className="text-stone-400">{item.book} {item.chapter}:{item.verse_number}</span>
+              {compareData.map((item, idx) => {
+                const verseRange =
+                  item.verse_numbers && item.verse_numbers.length > 1
+                    ? `${item.verse_numbers[0]}-${item.verse_numbers[item.verse_numbers.length - 1]}`
+                    : item.verse_number;
+                return (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-800 space-y-2"
+                  >
+                    <div className="flex items-center justify-between text-xs font-bold text-amber-600 dark:text-amber-400">
+                      <span>{item.version_name} ({item.version_id})</span>
+                      <span className="text-stone-400">{item.book} {item.chapter}:{verseRange}</span>
+                    </div>
+                    <p className="font-serif text-base text-stone-800 dark:text-stone-200 leading-relaxed whitespace-pre-line">
+                      {item.text}
+                    </p>
                   </div>
-                  <p className="font-serif text-base text-stone-800 dark:text-stone-200 leading-relaxed">
-                    “{item.text}”
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="py-8 text-center text-xs text-stone-400">

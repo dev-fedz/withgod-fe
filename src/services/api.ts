@@ -148,9 +148,10 @@ class ApiClient {
     });
   }
 
-  compareVerses(versions: string[], book: string, chapter: number, verse: number) {
+  compareVerses(versions: string[], book: string, chapter: number, verse: number | number[]) {
     const versionsParam = versions.join(',');
-    return this.request(`/bible/compare/?versions=${versionsParam}&book=${encodeURIComponent(book)}&chapter=${chapter}&verse=${verse}`);
+    const versesParam = Array.isArray(verse) ? verse.join(',') : verse;
+    return this.request(`/bible/compare/?versions=${versionsParam}&book=${encodeURIComponent(book)}&chapter=${chapter}&verses=${versesParam}`);
   }
 
   getHighlights(book?: string, chapter?: number) {

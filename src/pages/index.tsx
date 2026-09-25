@@ -67,6 +67,23 @@ export default function Home() {
     }
   };
 
+  const extractSnippet = (content?: string | null): string => {
+    if (!content) return '';
+    let text = content.replace(/<(style|script)[^>]*>[\s\S]*?<\/\1>/gi, '');
+    text = text.replace(/<(br|\/p|\/div|\/h[1-6]|\/li|\/tr|\/td|\/blockquote)[^>]*>/gi, ' ');
+    text = text.replace(/<[^>]+>/g, ' ');
+    text = text
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+    text = text.replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    return text.length > 140 ? `${text.slice(0, 140)}...` : text;
+  };
+
   return (
     <>
       <PageLayout title="Home" items={[]} />
@@ -280,9 +297,9 @@ export default function Home() {
                       <h4 className="font-semibold text-stone-900 dark:text-stone-100 text-sm truncate">{dev.title}</h4>
                       <span className="text-[11px] text-stone-400">{dev.date}</span>
                     </div>
-                    {dev.snippet && (
-                      <p className="text-xs text-stone-500 dark:text-stone-400 line-clamp-2 font-serif">{dev.snippet}</p>
-                    )}
+                    {extractSnippet(dev.snippet) ? (
+                      <p className="text-xs text-stone-500 dark:text-stone-400 line-clamp-2 font-serif">{extractSnippet(dev.snippet)}</p>
+                    ) : null}
                   </Link>
                 ))}
               </div>

@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Kalam:wght@400;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Lora:ital,wght@0,400..700;1,400..700&family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -44,3 +46,117 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(156, 163, 175, 0.7);
 }
+
+/* Devotion Notebook Canvas Fonts */
+.font-handwritten {
+  font-family: 'Caveat', cursive, sans-serif;
+}
+.font-kalam {
+  font-family: 'Kalam', cursive, sans-serif;
+}
+.font-playfair {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+.font-lora {
+  font-family: 'Lora', Georgia, serif;
+}
+.font-typewriter {
+  font-family: 'Courier Prime', Courier, monospace;
+}
+
+/* Notebook Canvas Background Patterns */
+.canvas-pattern-lined {
+  background-color: #FCFBF7;
+  background-image: 
+    linear-gradient(90deg, transparent 52px, #FCA5A5 52px, #FCA5A5 54px, transparent 54px),
+    linear-gradient(#E8E3D9 1px, transparent 1px);
+  background-size: 100% 100%, 100% 32px;
+}
+.dark .canvas-pattern-lined {
+  background-color: #1A1815;
+  background-image: 
+    linear-gradient(90deg, transparent 52px, #991B1B 52px, #991B1B 54px, transparent 54px),
+    linear-gradient(#2E2A24 1px, transparent 1px);
+  background-size: 100% 100%, 100% 32px;
+}
+
+.canvas-pattern-dots {
+  background-color: #FAF9F6;
+  background-image: radial-gradient(#D6D3CD 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+.dark .canvas-pattern-dots {
+  background-color: #171717;
+  background-image: radial-gradient(#404040 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+.canvas-pattern-parchment {
+  background-color: #F6F0E2;
+  background-image: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.5), rgba(217, 192, 155, 0.35));
+}
+.dark .canvas-pattern-parchment {
+  background-color: #242018;
+  background-image: radial-gradient(circle at 50% 50%, rgba(45, 38, 27, 0.6), rgba(20, 17, 12, 0.8));
+}
+
+.canvas-pattern-botanical {
+  background-color: #F1F6F2;
+  background-image: 
+    radial-gradient(ellipse at 85% 15%, rgba(110, 231, 183, 0.22), transparent 45%),
+    radial-gradient(ellipse at 15% 85%, rgba(167, 243, 208, 0.25), transparent 50%);
+}
+.dark .canvas-pattern-botanical {
+  background-color: #0E1F16;
+  background-image: 
+    radial-gradient(ellipse at 85% 15%, rgba(16, 185, 129, 0.15), transparent 45%),
+    radial-gradient(ellipse at 15% 85%, rgba(5, 150, 105, 0.12), transparent 50%);
+}
+
+.canvas-pattern-midnight {
+  background-color: #0A0F1D;
+  background-image: 
+    radial-gradient(ellipse at top, #1E1B4B 0%, #0A0F1D 70%),
+    radial-gradient(2px 2px at 40px 60px, rgba(255, 255, 255, 0.9), transparent),
+    radial-gradient(2.5px 2.5px at 160px 120px, rgba(253, 224, 71, 0.8), transparent),
+    radial-gradient(1.5px 1.5px at 280px 210px, rgba(255, 255, 255, 0.7), transparent);
+  background-size: 100% 100%, 300px 300px, 360px 360px, 240px 240px;
+}
+
+.canvas-pattern-blush {
+  background-color: #FFF1F2;
+  background-image: 
+    radial-gradient(ellipse at 75% 25%, rgba(251, 113, 133, 0.18), transparent 55%),
+    radial-gradient(ellipse at 25% 75%, rgba(244, 114, 182, 0.14), transparent 50%);
+}
+.dark .canvas-pattern-blush {
+  background-color: #260C14;
+  background-image: 
+    radial-gradient(ellipse at 75% 25%, rgba(244, 63, 94, 0.15), transparent 55%),
+    radial-gradient(ellipse at 25% 75%, rgba(219, 39, 119, 0.12), transparent 50%);
+}
+
+.canvas-pattern-kraft {
+  background-color: #EDE3CF;
+  background-image: repeating-linear-gradient(45deg, rgba(140, 110, 75, 0.04) 0px, rgba(140, 110, 75, 0.04) 2px, transparent 2px, transparent 6px);
+}
+.dark .canvas-pattern-kraft {
+  background-color: #292218;
+  background-image: repeating-linear-gradient(45deg, rgba(180, 140, 95, 0.05) 0px, rgba(180, 140, 95, 0.05) 2px, transparent 2px, transparent 6px);
+}
+
+.canvas-pattern-linen {
+  background-color: #F8F6F0;
+  background-image: 
+    linear-gradient(90deg, rgba(180, 170, 155, 0.12) 1px, transparent 1px),
+    linear-gradient(rgba(180, 170, 155, 0.12) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+.dark .canvas-pattern-linen {
+  background-color: #1A1916;
+  background-image: 
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
