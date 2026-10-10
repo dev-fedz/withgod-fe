@@ -504,6 +504,55 @@ class ApiClient {
       }),
     });
   }
+
+  // System Settings (Admin configured keys & app config)
+  getSystemSettings() {
+    return this.request('/users/system-settings/');
+  }
+
+  saveSystemSettings(settings: Record<string, string>) {
+    return this.request('/users/system-settings/', {
+      method: 'POST',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  markConversationAsRead(conversationId: string) {
+    return this.request(`/chat/conversations/${conversationId}/read/`, {
+      method: 'POST',
+    }).catch(() => null);
+  }
+
+  startChatCall(conversationId: string, callType: 'video' | 'audio' = 'video') {
+    return this.request(`/chat/conversations/${conversationId}/call/start/`, {
+      method: 'POST',
+      body: JSON.stringify({ call_type: callType }),
+    });
+  }
+
+  endChatCall(conversationId: string) {
+    return this.request(`/chat/conversations/${conversationId}/call/end/`, {
+      method: 'POST',
+    });
+  }
+
+  addGroupParticipants(conversationId: string, participantIds: string[]) {
+    return this.request(`/chat/conversations/${conversationId}/participants/`, {
+      method: 'POST',
+      body: JSON.stringify({ participant_ids: participantIds }),
+    });
+  }
+
+  pingPresence() {
+    return this.request('/chat/presence/', { method: 'POST' }).catch(() => null);
+  }
+
+  sendTypingStatus(conversationId: string, isTyping: boolean = true) {
+    return this.request(`/chat/conversations/${conversationId}/typing/`, {
+      method: 'POST',
+      body: JSON.stringify({ is_typing: isTyping }),
+    }).catch(() => null);
+  }
 }
 
 export const api = new ApiClient();

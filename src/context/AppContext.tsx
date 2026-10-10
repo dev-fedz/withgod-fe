@@ -141,6 +141,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           api.updatePreferences({ preferred_translation: savedVer }).catch(() => {});
         }
       }
+
+      // Also load system settings (e.g. admin-configured Gemini API key)
+      try {
+        const sysSettings = await api.getSystemSettings();
+        if (sysSettings?.gemini_api_key) {
+          setGeminiApiKeyState(sysSettings.gemini_api_key);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('withgod_gemini_api_key', sysSettings.gemini_api_key);
+          }
+        }
+      } catch {}
     } catch {
       setUser(null);
     } finally {
@@ -156,6 +167,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else {
         localStorage.removeItem('withgod_gemini_api_key');
       }
+    }
+    // If the user is staff/admin, persist to backend system settings so all users can use Shalom AI
+    if (user?.is_staff || user?.is_superuser) {
+      api.saveSystemSettings({ gemini_api_key: key }).catch(() => {});
     }
   };
 
@@ -207,6 +222,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         api.updatePreferences({ preferred_translation: savedVer }).catch(() => {});
       }
     }
+    // Also load system settings for Gemini API key
+    api.getSystemSettings().then((sysSettings) => {
+      if (sysSettings?.gemini_api_key) {
+        setGeminiApiKeyState(sysSettings.gemini_api_key);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('withgod_gemini_api_key', sysSettings.gemini_api_key);
+        }
+      }
+    }).catch(() => {});
   };
 
   const logout = () => {

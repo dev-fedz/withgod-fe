@@ -10,10 +10,27 @@ import {
   Check,
   Calendar,
   ExternalLink,
+  Columns,
+  Edit3,
+  Share2,
+  Slash,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Lock,
 } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
+import { Modal } from '../components/Modal';
 import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
+
+const HIGHLIGHT_COLORS = [
+  { id: 'yellow', label: 'Yellow', bg: '#FEF9C3', darkBg: 'rgba(234, 179, 8, 0.22)', dot: '#EAB308' },
+  { id: 'green', label: 'Green', bg: '#DCFCE7', darkBg: 'rgba(34, 197, 94, 0.22)', dot: '#22C55E' },
+  { id: 'blue', label: 'Blue', bg: '#DBEAFE', darkBg: 'rgba(59, 130, 246, 0.22)', dot: '#3B82F6' },
+  { id: 'purple', label: 'Purple', bg: '#F3E8FF', darkBg: 'rgba(168, 85, 247, 0.22)', dot: '#A855F7' },
+  { id: 'rose', label: 'Rose', bg: '#FFE4E6', darkBg: 'rgba(244, 63, 94, 0.22)', dot: '#F43F5E' },
+];
 
 const TORAH_BOOKS = [
   { id: 'all', label: 'All Portions', count: 54 },
@@ -26,7 +43,7 @@ const TORAH_BOOKS = [
 
 export default function TorahPage() {
   const router = useRouter();
-  const { currentVersion, setCurrentVersion, setCurrentBook, setCurrentChapter } = useApp();
+  const { user, currentVersion, setCurrentVersion, setCurrentBook, setCurrentChapter } = useApp();
 
   const [thisWeek, setThisWeek] = useState<any>(null);
   const [portions, setPortions] = useState<any[]>([]);
@@ -44,6 +61,42 @@ export default function TorahPage() {
   const [selectedBook, setSelectedBook] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedVerse, setCopiedVerse] = useState<string | null>(null);
+
+  // Verse Selection & Highlighting (Mobile Parity)
+  const [highlights, setHighlights] = useState<any[]>([]);
+  const [selectedVerses, setSelectedVerses] = useState<Record<string, number[]>>({});
+  const [activeSegKey, setActiveSegKey] = useState<string | null>(null);
+  const [collapsedSegments, setCollapsedSegments] = useState<Record<string, boolean>>({});
+
+  // Compare Modal state
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+  const [compareData, setCompareData] = useState<any[]>([]);
+  const [isLoadingCompare, setIsLoadingCompare] = useState(false);
+  const [compareRefInfo, setCompareRefInfo] = useState<{ book: string; chapter: number; verses: number[] } | null>(null);
+
+  // Sign In Prompt Modal
+  const [isLoginPromptModalOpen, setIsLoginPromptModalOpen] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  // Load User Highlights
+  const fetchHighlights = async () => {
+    if (!user) {
+      setHighlights([]);
+      return;
+    }
+    try {
+      const res = await api.getHighlights();
+      if (Array.isArray(res)) {
+        setHighlights(res);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch highlights:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchHighlights();
+  }, [user]);
 
   // Fetch This Week's Portion, Catalog, and Available Versions
   useEffect(() => {
@@ -89,6 +142,9 @@ export default function TorahPage() {
 
     const fetchReadings = async () => {
       setIsLoadingReadings(true);
+      // Clear selections when changing portion or version
+      setSelectedVerses({});
+      setActiveSegKey(null);
       try {
         const res = await api.getTorahReadings(selectedPortionId, selectedVersion);
         setReadingsData(res);
@@ -118,6 +174,181 @@ export default function TorahPage() {
     setTimeout(() => setCopiedVerse(null), 2000);
   };
 
+  // Toggle verse selection within a segment
+  const toggleVerseSelection = (segKey: string, verseNum: number) => {
+    if (!user) {
+      setIsLoginPromptModalOpen(true);
+      return;
+    }
+    setActiveSegKey(segKey);
+    setSelectedVerses((prev) => {
+      const current = prev[segKey] || [];
+      const updated = current.includes(verseNum)
+        ? current.filter((n) => n !== verseNum)
+        : [...current, verseNum].sort((a, b) => a - b);
+      if (updated.length === 0) {
+        const next = { ...prev };
+        delete next[segKey];
+        if (Object.keys(next).length === 0) setActiveSegKey(null);
+        return next;
+      }
+      return { ...prev, [segKey]: updated };
+    });
+  };
+
+  const clearSegmentSelection = (segKey: string | null) => {
+    if (!segKey) {
+      setSelectedVerses({});
+      setActiveSegKey(null);
+      return;
+    }
+    setSelectedVerses((prev) => {
+      const next = { ...prev };
+      delete next[segKey];
+      return next;
+    });
+    setActiveSegKey(null);
+  };
+
+  // Apply highlight to selected verses in a segment
+  const applyHighlight = async (seg: any, colorId: string | null) => {
+    if (!user) {
+      setIsLoginPromptModalOpen(true);
+      return;
+    }
+    const segKey = `${seg.book}_${seg.chapter}`;
+    const selVs = selectedVerses[segKey] || [];
+    if (selVs.length === 0) return;
+
+    if (!colorId) {
+      // Clear highlights for selected verses
+      const toDelete = highlights.filter(
+        (h) =>
+          h.chapter === seg.chapter &&
+          (h.book_name ? h.book_name.toLowerCase() === seg.book.toLowerCase() : true) &&
+          selVs.some((v) => v >= h.verse_start && v <= h.verse_end)
+      );
+      try {
+        await Promise.all(toDelete.map((h) => api.deleteHighlight(h.id)));
+        setHighlights((prev) => prev.filter((h) => !toDelete.some((d) => d.id === h.id)));
+      } catch (err) {
+        console.error('Failed to clear highlights:', err);
+      }
+      clearSegmentSelection(segKey);
+      return;
+    }
+
+    // Apply color highlight
+    const start = selVs[0];
+    const end = selVs[selVs.length - 1];
+    try {
+      const res = await api.createHighlight({
+        version_id: selectedVersion,
+        book_name: seg.book,
+        chapter: seg.chapter,
+        verse_start: start,
+        verse_end: end,
+        color: colorId,
+      });
+      setHighlights((prev) => [
+        ...prev.filter(
+          (h) =>
+            !(
+              h.chapter === seg.chapter &&
+              (h.book_name ? h.book_name.toLowerCase() === seg.book.toLowerCase() : true) &&
+              selVs.some((v) => v >= h.verse_start && v <= h.verse_end)
+            )
+        ),
+        res,
+      ]);
+    } catch (err) {
+      console.error('Failed to save highlight:', err);
+    }
+    clearSegmentSelection(segKey);
+  };
+
+  // Insight / Devotion creation
+  const handleAddToInsight = (seg: any) => {
+    if (!user) {
+      setIsLoginPromptModalOpen(true);
+      return;
+    }
+    const segKey = `${seg.book}_${seg.chapter}`;
+    const selVs = selectedVerses[segKey] || [];
+    if (selVs.length === 0) return;
+    const sorted = [...selVs].sort((a, b) => a - b);
+    const start = sorted[0];
+    const end = sorted[sorted.length - 1];
+    const combinedText = (seg.verses || [])
+      .filter((v: any) => selVs.includes(v.verse_number))
+      .map((v: any) => `[${v.verse_number}] ${v.text}`)
+      .join(' ');
+
+    clearSegmentSelection(segKey);
+    router.push({
+      pathname: '/devotions',
+      query: {
+        insert_verse: 'true',
+        book: seg.book,
+        chapter: seg.chapter,
+        verse_start: start,
+        verse_end: end,
+        version: selectedVersion,
+        text: combinedText,
+      },
+    });
+  };
+
+  // Open Compare translations modal
+  const handleOpenCompare = async (seg: any) => {
+    const segKey = `${seg.book}_${seg.chapter}`;
+    const selVs = selectedVerses[segKey] || [];
+    if (selVs.length === 0) return;
+
+    setCompareRefInfo({ book: seg.book, chapter: seg.chapter, verses: selVs });
+    setIsCompareModalOpen(true);
+    setIsLoadingCompare(true);
+
+    try {
+      const otherVersions = versions
+        .map((v: any) => v.id)
+        .filter((id: string) => id.toUpperCase() !== selectedVersion.toUpperCase());
+      const versionsToCompare = otherVersions.length > 0 ? otherVersions : ['KJV'];
+      const res = await api.compareVerses(versionsToCompare, seg.book, seg.chapter, selVs);
+      setCompareData(Array.isArray(res) ? res : res?.comparisons || []);
+    } catch (err) {
+      console.error('Compare error:', err);
+      setCompareData([]);
+    } finally {
+      setIsLoadingCompare(false);
+    }
+  };
+
+  // Share / Copy selected verses
+  const handleShareVerses = async (seg: any) => {
+    const segKey = `${seg.book}_${seg.chapter}`;
+    const selVs = selectedVerses[segKey] || [];
+    if (selVs.length === 0) return;
+    const sorted = [...selVs].sort((a, b) => a - b);
+    const start = sorted[0];
+    const end = sorted[sorted.length - 1];
+    const ref = `${seg.book} ${seg.chapter}:${start}${end !== start ? `-${end}` : ''} (${selectedVersion})`;
+    const text = (seg.verses || [])
+      .filter((v: any) => selVs.includes(v.verse_number))
+      .map((v: any) => `${v.verse_number}. ${v.text}`)
+      .join('\n');
+    const content = `"${text}"\n— ${ref}`;
+
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(content);
+        setCopyFeedback('Copied scripture to clipboard!');
+        setTimeout(() => setCopyFeedback(null), 2500);
+      }
+    } catch {}
+    clearSegmentSelection(segKey);
+  };
+
   // Filter portions list
   const filteredPortions = portions.filter((p) => {
     const matchesBook = selectedBook === 'all' || p.book.toLowerCase() === selectedBook.toLowerCase();
@@ -134,6 +365,12 @@ export default function TorahPage() {
   });
 
   const activeSegmentData = readingsData?.readings?.[activeReadingTab];
+  const segments = activeSegmentData?.segments || [];
+  const currentSelectedVerses = activeSegKey ? selectedVerses[activeSegKey] || [] : [];
+  const currentActiveSeg =
+    currentSelectedVerses.length > 0
+      ? segments.find((s: any) => `${s.book}_${s.chapter}` === activeSegKey)
+      : null;
 
   return (
     <>
@@ -245,14 +482,14 @@ export default function TorahPage() {
                   setSelectedVersion(e.target.value);
                   setCurrentVersion(e.target.value);
                 }}
-                className="text-xs font-semibold px-3 py-2 rounded-xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 cursor-pointer"
+                className="text-xs font-semibold px-3 py-2 rounded-xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 cursor-pointer"
               >
                 {/* Tagalog Group */}
-                {versions.some((v) => (v.language || '').toLowerCase() === 'tagalog') && (
-                  <optgroup label="🇵🇭 Tagalog Versions">
+                {versions.some((v: any) => v.language === 'tl') && (
+                  <optgroup label="Tagalog Versions">
                     {versions
-                      .filter((ver) => (ver.language || '').toLowerCase() === 'tagalog')
-                      .map((ver) => (
+                      .filter((v: any) => v.language === 'tl')
+                      .map((ver: any) => (
                         <option key={ver.id} value={ver.id}>
                           {ver.name} ({ver.abbreviation || ver.id})
                         </option>
@@ -261,11 +498,11 @@ export default function TorahPage() {
                 )}
 
                 {/* English Group */}
-                {versions.some((v) => (v.language || '').toLowerCase() === 'english') && (
-                  <optgroup label="🇬🇧 English Versions">
+                {versions.some((v: any) => v.language !== 'tl') && (
+                  <optgroup label="English Versions">
                     {versions
-                      .filter((ver) => (ver.language || '').toLowerCase() === 'english')
-                      .map((ver) => (
+                      .filter((v: any) => v.language !== 'tl')
+                      .map((ver: any) => (
                         <option key={ver.id} value={ver.id}>
                           {ver.name} ({ver.abbreviation || ver.id})
                         </option>
@@ -280,11 +517,15 @@ export default function TorahPage() {
           <div className="flex border-b border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-950 p-2 gap-2 overflow-x-auto">
             <button
               type="button"
-              onClick={() => setActiveReadingTab('torah')}
+              onClick={() => {
+                setActiveReadingTab('torah');
+                setSelectedVerses({});
+                setActiveSegKey(null);
+              }}
               className={`flex-1 py-3 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
                 activeReadingTab === 'torah'
                   ? 'bg-white dark:bg-stone-800 text-amber-700 dark:text-amber-400 shadow-md border border-amber-500/40 dark:border-amber-500/50 ring-1 ring-amber-500/20'
-                  : 'bg-stone-200/70 dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200 dark:hover:bg-stone-800 border border-transparent dark:border-stone-800'
+                  : 'bg-stone-200/70 dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:white hover:bg-stone-200 dark:hover:bg-stone-800 border border-transparent dark:border-stone-800'
               }`}
             >
               <span className="text-sm">📜</span>
@@ -302,11 +543,15 @@ export default function TorahPage() {
 
             <button
               type="button"
-              onClick={() => setActiveReadingTab('prophet')}
+              onClick={() => {
+                setActiveReadingTab('prophet');
+                setSelectedVerses({});
+                setActiveSegKey(null);
+              }}
               className={`flex-1 py-3 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
                 activeReadingTab === 'prophet'
                   ? 'bg-white dark:bg-stone-800 text-blue-700 dark:text-blue-400 shadow-md border border-blue-500/40 dark:border-blue-500/50 ring-1 ring-blue-500/20'
-                  : 'bg-stone-200/70 dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200 dark:hover:bg-stone-800 border border-transparent dark:border-stone-800'
+                  : 'bg-stone-200/70 dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:white hover:bg-stone-200 dark:hover:bg-stone-800 border border-transparent dark:border-stone-800'
               }`}
             >
               <span className="text-sm">🎺</span>
@@ -324,11 +569,15 @@ export default function TorahPage() {
 
             <button
               type="button"
-              onClick={() => setActiveReadingTab('gospel')}
+              onClick={() => {
+                setActiveReadingTab('gospel');
+                setSelectedVerses({});
+                setActiveSegKey(null);
+              }}
               className={`flex-1 py-3 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
                 activeReadingTab === 'gospel'
                   ? 'bg-white dark:bg-stone-800 text-emerald-700 dark:text-emerald-400 shadow-md border border-emerald-500/40 dark:border-emerald-500/50 ring-1 ring-emerald-500/20'
-                  : 'bg-stone-200/70 dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white hover:bg-stone-200 dark:hover:bg-stone-800 border border-transparent dark:border-stone-800'
+                  : 'bg-stone-200/70 dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:white hover:bg-stone-200 dark:hover:bg-stone-800 border border-transparent dark:border-stone-800'
               }`}
             >
               <span className="text-sm">✝️</span>
@@ -364,65 +613,153 @@ export default function TorahPage() {
               </div>
             ) : (
               <div className="space-y-8">
-                {activeSegmentData.segments.map((seg: any, idx: number) => (
-                  <div key={idx} className="space-y-4">
-                    <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-2">
-                      <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                        <span>{seg.reference}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
-                          {selectedVersion}
-                        </span>
-                      </h3>
+                {activeSegmentData.segments.map((seg: any, idx: number) => {
+                  const segKey = `${seg.book}_${seg.chapter}`;
+                  const isCollapsed = !!collapsedSegments[segKey];
+                  const selVs = selectedVerses[segKey] || [];
 
-                      <button
-                        type="button"
-                        onClick={() => handleOpenInReader(seg.book, seg.chapter)}
-                        className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 flex items-center gap-1 transition-colors"
-                      >
-                        <span>Open in Reader</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    {seg.verses && seg.verses.length > 0 ? (
-                      <div className="space-y-3">
-                        {seg.verses.map((v: any) => {
-                          const vRef = `${seg.book} ${seg.chapter}:${v.verse_number}`;
-                          const isCopied = copiedVerse === vRef;
-                          return (
-                            <div
-                              key={v.verse_number}
-                              className="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-stone-50 dark:hover:bg-stone-800/40 transition-colors"
-                            >
-                              <span className="text-xs font-bold text-stone-400 dark:text-stone-500 font-mono w-6 shrink-0 pt-0.5 text-right">
-                                {v.verse_number}
+                  return (
+                    <div
+                      key={idx}
+                      className="space-y-4 rounded-2xl p-4 sm:p-5 bg-stone-50/50 dark:bg-stone-900/40 border border-stone-100 dark:border-stone-800/80"
+                    >
+                      {/* Segment Header (Collapsible with Verse Count badge) */}
+                      <div className="flex items-center justify-between border-b border-stone-200/60 dark:border-stone-800 pb-3">
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCollapsedSegments((prev) => ({
+                                ...prev,
+                                [segKey]: !prev[segKey],
+                              }))
+                            }
+                            className="flex items-center gap-2 text-stone-700 dark:text-stone-200 hover:text-amber-600 transition-colors cursor-pointer"
+                          >
+                            {isCollapsed ? (
+                              <ChevronDown className="w-4 h-4 text-stone-400" />
+                            ) : (
+                              <ChevronUp className="w-4 h-4 text-stone-400" />
+                            )}
+                            <h3 className="text-sm sm:text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                              <span>{seg.reference}</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-mono">
+                                {selectedVersion}
                               </span>
-                              <p className="font-serif text-base text-stone-800 dark:text-stone-200 leading-relaxed flex-1">
-                                {v.text}
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => handleCopyText(v.text, vRef)}
-                                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-stone-400 hover:text-amber-600 hover:bg-stone-100 dark:hover:bg-stone-700 transition-all cursor-pointer shrink-0"
-                                title="Copy verse"
-                              >
-                                {isCopied ? (
-                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                ) : (
-                                  <Copy className="w-3.5 h-3.5" />
-                                )}
-                              </button>
+                              {seg.verses && (
+                                <span className="text-[11px] px-2 py-0.5 rounded-md bg-stone-200/70 dark:bg-stone-800 text-stone-600 dark:text-stone-400 font-medium">
+                                  {seg.verses.length}v
+                                </span>
+                              )}
+                            </h3>
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenInReader(seg.book, seg.chapter)}
+                          className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <span>Open in Reader</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Segment Verses (Rendered with Highlighting & Selection) */}
+                      {!isCollapsed && (
+                        <div>
+                          {seg.verses && seg.verses.length > 0 ? (
+                            <div className="space-y-1.5 pt-1">
+                              {seg.verses.map((v: any) => {
+                                const vRef = `${seg.book} ${seg.chapter}:${v.verse_number}`;
+                                const isCopied = copiedVerse === vRef;
+                                const isSelected = selVs.includes(v.verse_number);
+
+                                // Find if this verse has an active highlight
+                                const hl = highlights.find(
+                                  (h) =>
+                                    h.chapter === seg.chapter &&
+                                    (h.book_name
+                                      ? h.book_name.toLowerCase() === seg.book.toLowerCase()
+                                      : true) &&
+                                    v.verse_number >= h.verse_start &&
+                                    v.verse_number <= h.verse_end
+                                );
+                                const highlightObj = hl
+                                  ? HIGHLIGHT_COLORS.find((c) => c.id === hl.color)
+                                  : null;
+
+                                return (
+                                  <div
+                                    key={v.verse_number}
+                                    onClick={() => toggleVerseSelection(segKey, v.verse_number)}
+                                    style={{
+                                      backgroundColor: isSelected
+                                        ? undefined
+                                        : highlightObj
+                                        ? highlightObj.bg
+                                        : undefined,
+                                    }}
+                                    className={`group flex items-start gap-3 p-2.5 rounded-xl cursor-pointer transition-all ${
+                                      isSelected
+                                        ? 'bg-amber-100 dark:bg-amber-950/60 ring-2 ring-amber-500 shadow-xs'
+                                        : highlightObj
+                                        ? 'hover:opacity-90 dark:bg-opacity-20 border-l-4'
+                                        : 'hover:bg-stone-100/70 dark:hover:bg-stone-800/40'
+                                    }`}
+                                    style-extra={highlightObj ? { borderLeftColor: highlightObj.dot } : undefined}
+                                  >
+                                    <span
+                                      className={`text-xs font-bold font-mono w-6 shrink-0 pt-0.5 text-right ${
+                                        isSelected
+                                          ? 'text-amber-600 dark:text-amber-400 font-extrabold'
+                                          : highlightObj
+                                          ? 'text-stone-700 dark:text-stone-300'
+                                          : 'text-stone-400 dark:text-stone-500'
+                                      }`}
+                                    >
+                                      {v.verse_number}
+                                    </span>
+                                    <p
+                                      className={`font-serif text-base leading-relaxed flex-1 ${
+                                        isSelected
+                                          ? 'text-amber-950 dark:text-amber-100 font-medium'
+                                          : highlightObj
+                                          ? 'text-stone-900 dark:text-stone-100'
+                                          : 'text-stone-800 dark:text-stone-200'
+                                      }`}
+                                    >
+                                      {v.text}
+                                    </p>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCopyText(v.text, vRef);
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-stone-400 hover:text-amber-600 hover:bg-stone-200/80 dark:hover:bg-stone-700 transition-all cursor-pointer shrink-0"
+                                      title="Copy verse"
+                                    >
+                                      {isCopied ? (
+                                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                      ) : (
+                                        <Copy className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
+                                  </div>
+                                );
+                              })}
                             </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="py-6 text-center text-xs text-stone-400">
-                        Verses will appear here once loaded.
-                      </div>
-                    )}
-                  </div>
-                ))}
+                          ) : (
+                            <div className="py-6 text-center text-xs text-stone-400">
+                              Verses will appear here once loaded.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -440,7 +777,7 @@ export default function TorahPage() {
               </p>
             </div>
 
-            {/* Search Bar (Left aligned md:w-96 per standards) */}
+            {/* Search Bar */}
             <div className="relative w-full md:w-96">
               <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -448,7 +785,7 @@ export default function TorahPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search Torah name, meaning, or verses..."
-                className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20"
               />
             </div>
           </div>
@@ -538,6 +875,174 @@ export default function TorahPage() {
           </div>
         </section>
       </div>
+
+      {/* Floating Selection Toolbar (Mobile Parity: Highlights & Actions) */}
+      {currentSelectedVerses.length > 0 && currentActiveSeg && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl shadow-2xl border border-stone-200/80 dark:border-stone-800 p-3 px-5 max-w-sm w-[92%]">
+          {/* Header / Selection Info */}
+          <div className="flex items-center justify-between pb-2 mb-2 border-b border-stone-100 dark:border-stone-800 text-xs">
+            <span className="font-semibold text-stone-800 dark:text-stone-200">
+              {currentActiveSeg.book} {currentActiveSeg.chapter}:{currentSelectedVerses[0]}
+              {currentSelectedVerses.length > 1 && `-${currentSelectedVerses[currentSelectedVerses.length - 1]}`}
+              <span className="text-stone-400 font-normal ml-1">
+                ({currentSelectedVerses.length} {currentSelectedVerses.length === 1 ? 'verse' : 'verses'})
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => clearSegmentSelection(activeSegKey)}
+              className="p-1 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Color Highlight Dots */}
+          <div className="flex items-center justify-between pb-3 pt-1 px-1">
+            {HIGHLIGHT_COLORS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => applyHighlight(currentActiveSeg, c.id)}
+                title={`Highlight ${c.label}`}
+                className="w-7 h-7 rounded-full transition-transform hover:scale-110 active:scale-95 shadow-xs cursor-pointer"
+                style={{ backgroundColor: c.dot }}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={() => applyHighlight(currentActiveSeg, null)}
+              title="Clear highlight"
+              className="w-7 h-7 rounded-full border border-stone-300 dark:border-stone-700 flex items-center justify-center text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+            >
+              <Slash className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Action Buttons: Insight, Compare, Share / Copy */}
+          <div className="grid grid-cols-3 pt-2 border-t border-stone-100 dark:border-stone-800">
+            <button
+              type="button"
+              onClick={() => handleAddToInsight(currentActiveSeg)}
+              className="flex flex-col items-center justify-center gap-1 py-1 text-amber-600 hover:opacity-80 transition-opacity cursor-pointer"
+            >
+              <Edit3 className="w-4 h-4 text-amber-600" />
+              <span className="text-[11px] font-semibold text-amber-600">Insight</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleOpenCompare(currentActiveSeg)}
+              className="flex flex-col items-center justify-center gap-1 py-1 text-amber-600 hover:opacity-80 transition-opacity cursor-pointer"
+            >
+              <Columns className="w-4 h-4 text-amber-600" />
+              <span className="text-[11px] font-semibold text-amber-600">Compare</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleShareVerses(currentActiveSeg)}
+              className="flex flex-col items-center justify-center gap-1 py-1 text-amber-600 hover:opacity-80 transition-opacity cursor-pointer"
+            >
+              <Share2 className="w-4 h-4 text-amber-600" />
+              <span className="text-[11px] font-semibold text-amber-600">Share / Copy</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Compare Translations Modal */}
+      <Modal
+        isOpen={isCompareModalOpen}
+        onClose={() => setIsCompareModalOpen(false)}
+        title={`Compare Translations (${(() => {
+          if (!compareRefInfo || compareRefInfo.verses.length === 0) return '';
+          const sorted = [...compareRefInfo.verses].sort((a, b) => a - b);
+          if (sorted.length === 1) return `${compareRefInfo.book} ${compareRefInfo.chapter}:${sorted[0]}`;
+          const isConsecutive = sorted.every((v, i) => i === 0 || v === sorted[i - 1] + 1);
+          const range = isConsecutive ? `${sorted[0]}-${sorted[sorted.length - 1]}` : sorted.join(', ');
+          return `${compareRefInfo.book} ${compareRefInfo.chapter}:${range}`;
+        })()})`}
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-4">
+          {isLoadingCompare ? (
+            <div className="py-12 text-center space-y-2 text-stone-400 text-xs">
+              <div className="w-6 h-6 mx-auto border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              <p>Fetching translation comparisons...</p>
+            </div>
+          ) : compareData.length > 0 ? (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+              {compareData.map((item, idx) => {
+                const verseRange =
+                  item.verse_numbers && item.verse_numbers.length > 1
+                    ? `${item.verse_numbers[0]}-${item.verse_numbers[item.verse_numbers.length - 1]}`
+                    : item.verse_number;
+                return (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-800 space-y-2"
+                  >
+                    <div className="flex items-center justify-between text-xs font-bold text-amber-600 dark:text-amber-400">
+                      <span>{item.version_name || item.version_id} ({item.version_id})</span>
+                      <span className="text-stone-400">{item.book} {item.chapter}:{verseRange}</span>
+                    </div>
+                    <p className="font-serif text-base text-stone-800 dark:text-stone-200 leading-relaxed whitespace-pre-line">
+                      {item.text || item.verse_text}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-8 text-center text-xs text-stone-400">
+              No comparisons found for the selected verses.
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Sign In Required Prompt Modal */}
+      <Modal
+        isOpen={isLoginPromptModalOpen}
+        onClose={() => setIsLoginPromptModalOpen(false)}
+        title="Sign In Required"
+      >
+        <div className="space-y-4 text-center py-4">
+          <div className="w-12 h-12 mx-auto rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center">
+            <Lock className="w-6 h-6" />
+          </div>
+          <p className="text-sm text-stone-600 dark:text-stone-300">
+            Please sign in or create an account to highlight verses, save study insights, or compare translations.
+          </p>
+          <div className="flex gap-2 justify-center pt-2">
+            <button
+              type="button"
+              onClick={() => setIsLoginPromptModalOpen(false)}
+              className="px-4 py-2 text-xs font-semibold text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsLoginPromptModalOpen(false);
+                router.push('/profile');
+              }}
+              className="px-4 py-2 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded-xl shadow-sm"
+            >
+              Sign In
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Copied Feedback Toast */}
+      {copyFeedback && (
+        <div className="fixed bottom-24 md:bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 rounded-full text-xs font-semibold shadow-lg">
+          {copyFeedback}
+        </div>
+      )}
     </>
   );
 }

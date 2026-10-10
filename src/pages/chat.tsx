@@ -14,9 +14,12 @@ import {
   Sparkles,
   Phone,
   Video,
+  Check,
+  CheckCheck,
 } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
 import { Modal } from '../components/Modal';
+import { VideoCallModal } from '../components/VideoCallModal';
 import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 
@@ -25,8 +28,9 @@ interface DirectoryUser {
   email: string;
   first_name: string;
   last_name: string;
-  display_name: string;
-  avatar_color: string;
+  full_name?: string;
+  display_name?: string;
+  avatar_color?: string;
 }
 
 interface ChatMessageItem {
@@ -36,7 +40,8 @@ interface ChatMessageItem {
     email: string;
     first_name: string;
     last_name: string;
-    display_name: string;
+    full_name?: string;
+    display_name?: string;
   };
   content: string;
   message_type: string;
@@ -46,13 +51,19 @@ interface ChatMessageItem {
 
 interface ConversationItem {
   id: string;
-  title: string;
+  name?: string;
+  title?: string;
+  display_name?: string;
+  description?: string;
   is_group: boolean;
   avatar_color: string;
-  call_active: boolean;
+  call_active?: boolean;
+  call_type?: 'video' | 'audio';
+  call_room_id?: string;
   unread_count: number;
   last_message: ChatMessageItem | null;
   participants: any[];
+  other_user?: any;
   updated_at: string;
 }
 
@@ -68,9 +79,15 @@ export default function ChatPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
 
+  // Calling state
+  const [isCallModalOpen, setIsCallModalOpen] = useState(false);
+  const [callType, setCallType] = useState<'video' | 'audio'>('video');
+  const [isCaller, setIsCaller] = useState(true);
+
   // Modals
   const [isNewDirectModalOpen, setIsNewDirectModalOpen] = useState(false);
   const [isNewGroupModalOpen, setIsNewGroupModalOpen] = useState(false);
+  const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [directoryUsers, setDirectoryUsers] = useState<DirectoryUser[]>([]);
   const [searchUserQuery, setSearchUserQuery] = useState('');
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -81,11 +98,51 @@ export default function ChatPage() {
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
 
+  // Add members form
+  const [addMemberIds, setAddMemberIds] = useState<string[]>([]);
+  const [addingMembers, setAddingMembers] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollingRef = useRef<any>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const getDirectoryUserName = (u: DirectoryUser): string => {
+    return (
+      u.full_name ||
+      u.display_name ||
+      `${u.first_name || ''} ${u.last_name || ''}`.trim() ||
+      u.email ||
+      'Member'
+    );
+  };
+
+  const getConversationTitle = (conv: ConversationItem): string => {
+    if (conv.display_name) return conv.display_name;
+    if (conv.title) return conv.title;
+    if (conv.name) return conv.name;
+    if (conv.other_user) {
+      return (
+        conv.other_user.full_name ||
+        conv.other_user.display_name ||
+        `${conv.other_user.first_name || ''} ${conv.other_user.last_name || ''}`.trim() ||
+        conv.other_user.email
+      );
+    }
+    return conv.is_group ? 'Group Chat' : 'Direct Chat';
+  };
+
+  const getSenderName = (sender?: any): string => {
+    if (!sender) return 'Member';
+    return (
+      sender.full_name ||
+      sender.display_name ||
+      `${sender.first_name || ''} ${sender.last_name || ''}`.trim() ||
+      sender.email ||
+      'Member'
+    );
   };
 
   // 1. Fetch Conversations List
@@ -95,7 +152,21 @@ export default function ChatPage() {
       const res = await api.getChatConversations();
       const list = Array.isArray(res) ? res : (res?.conversations || res?.results || []);
       if (Array.isArray(list)) {
-        setConversations(list);
+        setConversations((prev) => {
+          // Keep active conversation visible even if it has 0 messages yet
+          if (activeConv && !list.some((c: any) => c.id === activeConv.id)) {
+            return [activeConv, ...list];
+          }
+          return list;
+        });
+
+        // Update activeConv call status if changed
+        if (activeConv) {
+          const updatedActive = list.find((c: any) => c.id === activeConv.id);
+          if (updatedActive && updatedActive.call_active !== activeConv.call_active) {
+            setActiveConv(updatedActive);
+          }
+        }
       }
     } catch (err) {
       console.error('[Chat] fetchConversations error:', err);
@@ -150,7 +221,7 @@ export default function ChatPage() {
       fetchConversations();
       const interval = setInterval(() => {
         fetchConversations(true);
-      }, 10000);
+      }, 8000);
       return () => clearInterval(interval);
     } else {
       setLoading(false);
@@ -165,6 +236,9 @@ export default function ChatPage() {
       return;
     }
 
+    // Mark as read
+    api.markConversationAsRead(activeConv.id).catch(() => {});
+
     setLoadingMessages(true);
     fetchMessages(activeConv.id).finally(() => setLoadingMessages(false));
 
@@ -173,7 +247,7 @@ export default function ChatPage() {
       const latestMsg = messages[messages.length - 1];
       const since = latestMsg ? latestMsg.created_at : undefined;
       fetchMessages(activeConv.id, since);
-    }, 4000);
+    }, 3500);
 
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
@@ -210,8 +284,11 @@ export default function ChatPage() {
       const res = await api.startDirectChat(targetUser.id);
       const conv = res?.conversation || (res?.id ? res : null);
       if (conv) {
+        setConversations((prev) => {
+          const exists = prev.some((c) => c.id === conv.id);
+          return exists ? prev : [conv, ...prev];
+        });
         setActiveConv(conv);
-        fetchConversations(true);
       }
     } catch (err) {
       console.error('[Chat] startDirectChat error:', err);
@@ -228,13 +305,40 @@ export default function ChatPage() {
       const conv = res?.conversation || (res?.id ? res : null);
       if (conv) {
         setIsNewGroupModalOpen(false);
+        setConversations((prev) => {
+          const exists = prev.some((c) => c.id === conv.id);
+          return exists ? prev : [conv, ...prev];
+        });
         setActiveConv(conv);
-        fetchConversations(true);
       }
     } catch (err) {
       console.error('[Chat] createGroup error:', err);
     } finally {
       setCreatingGroup(false);
+    }
+  };
+
+  const handleAddMembers = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeConv || addMemberIds.length === 0 || addingMembers) return;
+
+    setAddingMembers(true);
+    try {
+      const res = await api.addGroupParticipants(activeConv.id, addMemberIds);
+      const updatedConv = res?.conversation || (res?.id ? res : null);
+      if (updatedConv) {
+        setActiveConv(updatedConv);
+        setConversations((prev) =>
+          prev.map((c) => (c.id === updatedConv.id ? updatedConv : c))
+        );
+      }
+      setIsAddMemberModalOpen(false);
+      setAddMemberIds([]);
+      fetchConversations(true);
+    } catch (err) {
+      console.error('[Chat] addMembers error:', err);
+    } finally {
+      setAddingMembers(false);
     }
   };
 
@@ -244,6 +348,33 @@ export default function ChatPage() {
     } else {
       setSelectedUserIds([...selectedUserIds, userId]);
     }
+  };
+
+  const toggleAddMemberSelection = (userId: string) => {
+    if (addMemberIds.includes(userId)) {
+      setAddMemberIds(addMemberIds.filter((id) => id !== userId));
+    } else {
+      setAddMemberIds([...addMemberIds, userId]);
+    }
+  };
+
+  const handleStartCall = async (type: 'video' | 'audio' = 'video') => {
+    if (!activeConv) return;
+    setCallType(type);
+    setIsCaller(true);
+    setIsCallModalOpen(true);
+    try {
+      await api.startChatCall(activeConv.id, type);
+    } catch (e) {
+      console.warn('Call start API error:', e);
+    }
+  };
+
+  const handleJoinCall = () => {
+    if (!activeConv) return;
+    setCallType(activeConv.call_type || 'video');
+    setIsCaller(false);
+    setIsCallModalOpen(true);
   };
 
   if (!user) {
@@ -269,6 +400,8 @@ export default function ChatPage() {
     );
   }
 
+  const activeTitle = activeConv ? getConversationTitle(activeConv) : '';
+
   return (
     <>
       <PageLayout title="Chats" items={[{ label: 'Chats' }]} />
@@ -278,7 +411,11 @@ export default function ChatPage() {
 
       <div className="h-[calc(100vh-8rem)] flex flex-col md:flex-row bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden shadow-sm">
         {/* Left Sidebar: Conversations List */}
-        <div className={`w-full md:w-80 lg:w-96 flex flex-col border-r border-stone-200 dark:border-stone-800 ${activeConv ? 'hidden md:flex' : 'flex'}`}>
+        <div
+          className={`w-full md:w-80 lg:w-96 flex flex-col border-r border-stone-200 dark:border-stone-800 ${
+            activeConv ? 'hidden md:flex' : 'flex'
+          }`}
+        >
           {/* Header */}
           <div className="p-4 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between bg-stone-50/50 dark:bg-stone-900/50">
             <div>
@@ -341,7 +478,8 @@ export default function ChatPage() {
             ) : (
               conversations.map((conv) => {
                 const isSelected = activeConv?.id === conv.id;
-                const initial = (conv.title || 'C').substring(0, 1).toUpperCase();
+                const title = getConversationTitle(conv);
+                const initial = title.substring(0, 1).toUpperCase();
                 return (
                   <button
                     key={conv.id}
@@ -353,15 +491,18 @@ export default function ChatPage() {
                     }`}
                   >
                     <div
-                      className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
+                      className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 relative"
                       style={{ backgroundColor: conv.avatar_color || '#3B82F6' }}
                     >
                       {conv.is_group ? <Users className="w-5 h-5" /> : initial}
+                      {conv.call_active && (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white dark:border-stone-900 animate-pulse" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">
-                          {conv.title}
+                          {title}
                         </p>
                         {conv.last_message && (
                           <span className="text-[10px] text-stone-400">
@@ -372,9 +513,22 @@ export default function ChatPage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-stone-500 dark:text-stone-400 truncate mt-0.5">
-                        {conv.last_message?.content || (conv.is_group ? 'Group conversation' : 'Direct message')}
-                      </p>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <p className="text-xs text-stone-500 dark:text-stone-400 truncate">
+                          {conv.call_active ? (
+                            <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                              <Phone className="w-3 h-3" /> Call in progress
+                            </span>
+                          ) : (
+                            conv.last_message?.content || (conv.is_group ? 'Group conversation' : 'Direct message')
+                          )}
+                        </p>
+                        {conv.unread_count > 0 && (
+                          <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white">
+                            {conv.unread_count}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </button>
                 );
@@ -384,12 +538,16 @@ export default function ChatPage() {
         </div>
 
         {/* Right Area: Active Chat Room */}
-        <div className={`flex-1 flex flex-col bg-stone-50/40 dark:bg-stone-950/30 ${!activeConv ? 'hidden md:flex' : 'flex'}`}>
+        <div
+          className={`flex-1 flex flex-col bg-stone-50/40 dark:bg-stone-950/30 ${
+            !activeConv ? 'hidden md:flex' : 'flex'
+          }`}
+        >
           {activeConv ? (
             <>
               {/* Active Room Header */}
-              <div className="p-3.5 px-4 bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
-                <div className="flex items-center gap-3">
+              <div className="p-3 px-4 bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
                   <button
                     onClick={() => setActiveConv(null)}
                     className="md:hidden p-1.5 -ml-1 text-stone-500 hover:text-stone-900 dark:hover:text-stone-100"
@@ -397,19 +555,77 @@ export default function ChatPage() {
                     <ArrowLeft className="w-5 h-5" />
                   </button>
                   <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-xs"
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
                     style={{ backgroundColor: activeConv.avatar_color || '#3B82F6' }}
                   >
-                    {activeConv.is_group ? <Users className="w-4 h-4" /> : (activeConv.title || 'C').substring(0, 1).toUpperCase()}
+                    {activeConv.is_group ? <Users className="w-5 h-5" /> : activeTitle.substring(0, 1).toUpperCase()}
                   </div>
-                  <div>
-                    <h2 className="text-sm font-bold text-stone-900 dark:text-stone-100">{activeConv.title}</h2>
-                    <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                      {activeConv.is_group ? `${activeConv.participants?.length || 2} members` : 'Direct conversation'}
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-bold text-stone-900 dark:text-stone-100 truncate">{activeTitle}</h2>
+                    <p className="text-[11px] text-stone-500 dark:text-stone-400 truncate">
+                      {activeConv.is_group
+                        ? `${activeConv.participants?.length || 2} members`
+                        : 'Direct conversation'}
                     </p>
                   </div>
                 </div>
+
+                {/* Header Action Buttons: Calling & Add Members */}
+                <div className="flex items-center gap-1.5">
+                  {activeConv.is_group && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddMemberModalOpen(true);
+                        fetchCommunityUsers('');
+                        setAddMemberIds([]);
+                      }}
+                      title="Add Members to Group"
+                      className="p-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors flex items-center gap-1 text-xs font-medium"
+                    >
+                      <UserPlus className="w-4 h-4 text-amber-600" />
+                      <span className="hidden sm:inline">Add</span>
+                    </button>
+                  )}
+
+                  {/* Audio Call Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleStartCall('audio')}
+                    title="Start Voice Call"
+                    className="p-2 rounded-xl text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors"
+                  >
+                    <Phone className="w-4 h-4" />
+                  </button>
+
+                  {/* Video Call Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleStartCall('video')}
+                    title="Start Video Call"
+                    className="p-2 rounded-xl text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors"
+                  >
+                    <Video className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
+
+              {/* Active Call In Progress Banner */}
+              {activeConv.call_active && (
+                <div className="bg-emerald-500 text-white px-4 py-2 flex items-center justify-between text-xs font-semibold shadow-inner">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
+                    <span>Call is actively in progress</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleJoinCall}
+                    className="px-3 py-1 rounded-lg bg-white text-emerald-700 font-bold hover:bg-emerald-50 transition-colors"
+                  >
+                    Join Call
+                  </button>
+                </div>
+              )}
 
               {/* Messages Container */}
               <div className="flex-1 p-4 overflow-y-auto space-y-3">
@@ -422,6 +638,7 @@ export default function ChatPage() {
                 ) : (
                   messages.map((m) => {
                     const isMe = m.sender?.id === user.id;
+                    const senderName = getSenderName(m.sender);
                     return (
                       <div
                         key={m.id}
@@ -429,7 +646,7 @@ export default function ChatPage() {
                       >
                         {!isMe && (
                           <span className="text-[10px] font-semibold text-stone-500 dark:text-stone-400 ml-1 mb-0.5">
-                            {m.sender?.display_name || m.sender?.first_name || 'Member'}
+                            {senderName}
                           </span>
                         )}
                         <div
@@ -456,7 +673,10 @@ export default function ChatPage() {
               </div>
 
               {/* Message Input Box */}
-              <form onSubmit={handleSendMessage} className="p-3 bg-white dark:bg-stone-900 border-t border-stone-200 dark:border-stone-800 flex items-center gap-2">
+              <form
+                onSubmit={handleSendMessage}
+                className="p-3 bg-white dark:bg-stone-900 border-t border-stone-200 dark:border-stone-800 flex items-center gap-2"
+              >
                 <input
                   type="text"
                   value={inputText}
@@ -487,7 +707,24 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Modal: New Direct Message (Non-admin directory) */}
+      {/* Video / Voice Call Modal */}
+      {activeConv && (
+        <VideoCallModal
+          isOpen={isCallModalOpen}
+          onClose={() => {
+            setIsCallModalOpen(false);
+            fetchConversations(true);
+          }}
+          conversationId={activeConv.id}
+          callerTitle={activeTitle}
+          avatarColor={activeConv.avatar_color}
+          isGroup={activeConv.is_group}
+          isCaller={isCaller}
+          callType={callType}
+        />
+      )}
+
+      {/* Modal: New Direct Message */}
       <Modal
         isOpen={isNewDirectModalOpen}
         onClose={() => setIsNewDirectModalOpen(false)}
@@ -514,24 +751,27 @@ export default function ChatPage() {
             ) : directoryUsers.length === 0 ? (
               <div className="py-6 text-center text-xs text-stone-400">No members found.</div>
             ) : (
-              directoryUsers.map((u) => (
-                <button
-                  key={u.id}
-                  onClick={() => handleStartDirectChat(u)}
-                  className="w-full py-2.5 px-3 flex items-center gap-3 hover:bg-stone-50 dark:hover:bg-stone-800 rounded-xl transition-colors text-left"
-                >
-                  <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                    style={{ backgroundColor: u.avatar_color || '#3B82F6' }}
+              directoryUsers.map((u) => {
+                const name = getDirectoryUserName(u);
+                return (
+                  <button
+                    key={u.id}
+                    onClick={() => handleStartDirectChat(u)}
+                    className="w-full py-2.5 px-3 flex items-center gap-3 hover:bg-stone-50 dark:hover:bg-stone-800 rounded-xl transition-colors text-left"
                   >
-                    {(u.display_name || u.first_name || 'M').substring(0, 1).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">{u.display_name}</p>
-                    <p className="text-xs text-stone-400 truncate">{u.email}</p>
-                  </div>
-                </button>
-              ))
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                      style={{ backgroundColor: u.avatar_color || '#3B82F6' }}
+                    >
+                      {name.substring(0, 1).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">{name}</p>
+                      <p className="text-xs text-stone-400 truncate">{u.email}</p>
+                    </div>
+                  </button>
+                );
+              })
             )}
           </div>
         </div>
@@ -578,13 +818,16 @@ export default function ChatPage() {
             <div className="max-h-48 overflow-y-auto border border-stone-200 dark:border-stone-700 rounded-xl divide-y divide-stone-100 dark:divide-stone-800 p-1">
               {directoryUsers.map((u) => {
                 const isSelected = selectedUserIds.includes(u.id);
+                const name = getDirectoryUserName(u);
                 return (
                   <button
                     key={u.id}
                     type="button"
                     onClick={() => toggleUserSelection(u.id)}
                     className={`w-full py-2 px-3 flex items-center justify-between rounded-lg transition-colors text-left ${
-                      isSelected ? 'bg-amber-50 dark:bg-amber-950/40' : 'hover:bg-stone-50 dark:hover:bg-stone-800/50'
+                      isSelected
+                        ? 'bg-amber-50 dark:bg-amber-950/40'
+                        : 'hover:bg-stone-50 dark:hover:bg-stone-800/50'
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -592,10 +835,10 @@ export default function ChatPage() {
                         className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
                         style={{ backgroundColor: u.avatar_color || '#3B82F6' }}
                       >
-                        {(u.display_name || 'M').substring(0, 1).toUpperCase()}
+                        {name.substring(0, 1).toUpperCase()}
                       </div>
                       <span className="text-xs font-medium text-stone-800 dark:text-stone-200 truncate">
-                        {u.display_name}
+                        {name}
                       </span>
                     </div>
                     <span className={`text-xs font-bold ${isSelected ? 'text-amber-600' : 'text-stone-400'}`}>
@@ -621,6 +864,92 @@ export default function ChatPage() {
               className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-sm transition-colors"
             >
               {creatingGroup ? 'Creating...' : 'Create Group'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Add Members to Existing Group */}
+      <Modal
+        isOpen={isAddMemberModalOpen}
+        onClose={() => setIsAddMemberModalOpen(false)}
+        title="Add Members to Group"
+      >
+        <form onSubmit={handleAddMembers} className="space-y-4">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-3 text-stone-400" />
+            <input
+              type="text"
+              value={searchUserQuery}
+              onChange={(e) => {
+                setSearchUserQuery(e.target.value);
+                fetchCommunityUsers(e.target.value);
+              }}
+              placeholder="Search members to add..."
+              className="w-full pl-9 pr-4 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-stone-600 dark:text-stone-400 uppercase tracking-wider mb-1">
+              Select Brethren ({addMemberIds.length} selected)
+            </label>
+            <div className="max-h-56 overflow-y-auto border border-stone-200 dark:border-stone-700 rounded-xl divide-y divide-stone-100 dark:divide-stone-800 p-1">
+              {directoryUsers
+                .filter((u) => {
+                  // Filter out users already in activeConv.participants
+                  const existingIds = new Set(activeConv?.participants?.map((p: any) => p.user?.id || p.user_id));
+                  return !existingIds.has(u.id);
+                })
+                .map((u) => {
+                  const isSelected = addMemberIds.includes(u.id);
+                  const name = getDirectoryUserName(u);
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => toggleAddMemberSelection(u.id)}
+                      className={`w-full py-2 px-3 flex items-center justify-between rounded-lg transition-colors text-left ${
+                        isSelected
+                          ? 'bg-amber-50 dark:bg-amber-950/40'
+                          : 'hover:bg-stone-50 dark:hover:bg-stone-800/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                          style={{ backgroundColor: u.avatar_color || '#3B82F6' }}
+                        >
+                          {name.substring(0, 1).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-stone-800 dark:text-stone-200 truncate">{name}</p>
+                          <p className="text-[10px] text-stone-400 truncate">{u.email}</p>
+                        </div>
+                      </div>
+                      <span className={`text-xs font-bold ${isSelected ? 'text-amber-600' : 'text-stone-400'}`}>
+                        {isSelected ? '✓' : '+'}
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsAddMemberModalOpen(false)}
+              className="px-4 py-2 text-xs font-semibold text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={addMemberIds.length === 0 || addingMembers}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-sm transition-colors"
+            >
+              {addingMembers ? 'Adding...' : `Add to Group (${addMemberIds.length})`}
             </button>
           </div>
         </form>

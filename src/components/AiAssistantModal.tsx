@@ -14,6 +14,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { api } from '../services/api';
 import { AiAnimatedEye } from './AiAnimatedEye';
 
 export interface ChatMessage {
@@ -105,6 +106,14 @@ export const AiAssistantModal: React.FC = () => {
     const existingSessions = loadSessionsFromStorage();
     setSessions(existingSessions);
 
+    if (!geminiApiKey) {
+      api.getSystemSettings().then((sys) => {
+        if (sys?.gemini_api_key) {
+          setGeminiApiKey(sys.gemini_api_key);
+        }
+      }).catch(() => {});
+    }
+
     if (existingSessions.length > 0 && !currentSessionId) {
       const latest = existingSessions[0];
       setCurrentSessionId(latest.id);
@@ -117,7 +126,7 @@ export const AiAssistantModal: React.FC = () => {
       setCurrentSessionTitle('New Conversation');
       setMessages([]);
     }
-  }, [isAiModalOpen, userId]);
+  }, [isAiModalOpen, userId, geminiApiKey]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -226,10 +235,20 @@ export const AiAssistantModal: React.FC = () => {
     setIsThinking(true);
 
     try {
-      const apiKey =
+      let apiKey =
         geminiApiKey ||
         process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
         (typeof window !== 'undefined' ? localStorage.getItem('withgod_gemini_api_key') : '');
+
+      if (!apiKey) {
+        try {
+          const sys = await api.getSystemSettings();
+          if (sys?.gemini_api_key) {
+            apiKey = sys.gemini_api_key;
+            setGeminiApiKey(apiKey);
+          }
+        } catch {}
+      }
 
       if (!apiKey) {
         const warning =

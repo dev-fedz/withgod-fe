@@ -36,12 +36,18 @@ export default function ProfilePage() {
     }
   }, [geminiApiKey]);
 
-  const handleSaveGeminiKey = () => {
+  const handleSaveGeminiKey = async () => {
     setIsSavingKey(true);
     try {
-      setGeminiApiKey(geminiKeyInput.trim());
+      const trimmed = geminiKeyInput.trim();
+      setGeminiApiKey(trimmed);
+      if (user?.is_staff || user?.is_superuser) {
+        await api.saveSystemSettings({ gemini_api_key: trimmed });
+      }
       setKeySaved(true);
       setTimeout(() => setKeySaved(false), 3000);
+    } catch (e: any) {
+      console.error('Failed to save system settings:', e);
     } finally {
       setIsSavingKey(false);
     }
@@ -265,7 +271,14 @@ export default function ProfilePage() {
                 {geminiApiKey && (
                   <button
                     type="button"
-                    onClick={() => { setGeminiApiKey(''); setGeminiKeyInput(''); setKeyTestStatus('idle'); }}
+                    onClick={async () => {
+                      setGeminiApiKey('');
+                      setGeminiKeyInput('');
+                      setKeyTestStatus('idle');
+                      if (user?.is_staff || user?.is_superuser) {
+                        await api.saveSystemSettings({ gemini_api_key: '' }).catch(() => {});
+                      }
+                    }}
                     className="py-2 px-3 rounded-xl border border-rose-200 dark:border-rose-900/50 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
                   >
                     Clear
