@@ -33,6 +33,17 @@ Open [http://localhost:3001](http://localhost:3001).
 npm run build
 ```
 
+### 5. Run with Docker
+Build and run the standalone container:
+```bash
+docker build -t withgod-fe .
+docker run -p 3001:3001 withgod-fe
+```
+Or run with standalone Docker Compose:
+```bash
+docker compose up -d --build
+```
+
 ## 📐 Architecture
 - `src/components/PersistentLayout.tsx`: Static sidebar/navbar shell with animated `framer-motion` page transitions.
 - `src/components/PageLayout.tsx`: State synchronizer updating `AppContext`.
