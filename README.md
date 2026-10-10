@@ -26,7 +26,7 @@ npm run dev
 # or
 yarn dev
 ```
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3001](http://localhost:3001).
 
 ### 4. Build for Production
 ```bash
