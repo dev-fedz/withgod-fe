@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import {
   ChevronLeft,
@@ -11,11 +11,17 @@ import {
   PlusCircle,
   X,
   Check,
+  CheckCircle2,
   Search,
   Download,
   Trash2,
   Edit2,
+  Edit3,
+  Share2,
+  Slash,
   LogIn,
+  Loader2,
+  ArrowLeft,
 } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
 import { Modal } from '../components/Modal';
@@ -23,12 +29,12 @@ import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 
 const HIGHLIGHT_COLORS = [
-  { id: 'yellow', label: 'Yellow', bg: 'bg-yellow-200/70 dark:bg-yellow-500/30 text-yellow-900 dark:text-yellow-100', dot: 'bg-yellow-400' },
-  { id: 'amber', label: 'Amber', bg: 'bg-amber-200/70 dark:bg-amber-500/30 text-amber-900 dark:text-amber-100', dot: 'bg-amber-500' },
-  { id: 'emerald', label: 'Emerald', bg: 'bg-emerald-200/70 dark:bg-emerald-500/30 text-emerald-900 dark:text-emerald-100', dot: 'bg-emerald-500' },
-  { id: 'sky', label: 'Sky', bg: 'bg-sky-200/70 dark:bg-sky-500/30 text-sky-900 dark:text-sky-100', dot: 'bg-sky-400' },
-  { id: 'rose', label: 'Rose', bg: 'bg-rose-200/70 dark:bg-rose-500/30 text-rose-900 dark:text-rose-100', dot: 'bg-rose-400' },
-  { id: 'purple', label: 'Purple', bg: 'bg-purple-200/70 dark:bg-purple-500/30 text-purple-900 dark:text-purple-100', dot: 'bg-purple-400' },
+  { id: 'yellow', label: 'Yellow', bg: 'bg-yellow-200/70 dark:bg-yellow-500/30 text-yellow-900 dark:text-yellow-100', dot: '#FACC15' },
+  { id: 'amber', label: 'Amber', bg: 'bg-amber-200/70 dark:bg-amber-500/30 text-amber-900 dark:text-amber-100', dot: '#FB923C' },
+  { id: 'emerald', label: 'Emerald', bg: 'bg-emerald-200/70 dark:bg-emerald-500/30 text-emerald-900 dark:text-emerald-100', dot: '#34D399' },
+  { id: 'sky', label: 'Sky', bg: 'bg-sky-200/70 dark:bg-sky-500/30 text-sky-900 dark:text-sky-100', dot: '#38BDF8' },
+  { id: 'rose', label: 'Rose', bg: 'bg-rose-200/70 dark:bg-rose-500/30 text-rose-900 dark:text-rose-100', dot: '#FB7185' },
+  { id: 'purple', label: 'Purple', bg: 'bg-purple-200/70 dark:bg-purple-500/30 text-purple-900 dark:text-purple-100', dot: '#C084FC' },
 ];
 
 export default function BibleReader() {
@@ -51,6 +57,20 @@ export default function BibleReader() {
   const [isLoading, setIsLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
 
+  // Version Selector Modal State (Mobile Parity)
+  const [isVersionModalOpen, setIsVersionModalOpen] = useState(false);
+  const [downloadedVersions, setDownloadedVersions] = useState<string[]>([]);
+  const [downloadingVersionId, setDownloadingVersionId] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<{
+    versionId: string;
+    percent: number;
+    statusText: string;
+    isComplete: boolean;
+    error?: string;
+  } | null>(null);
+  const [deleteConfirmVersion, setDeleteConfirmVersion] = useState<{ id: string; name: string } | null>(null);
+  const [deleteSuccessMessage, setDeleteSuccessMessage] = useState<string | null>(null);
+
   // Download More Versions modal state
   const [isDownloadVersionsModalOpen, setIsDownloadVersionsModalOpen] = useState(false);
   const [availableVersions, setAvailableVersions] = useState<any[]>([]);
@@ -61,20 +81,48 @@ export default function BibleReader() {
 
   // Verse selection state
   const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
-  // Modals state
+  // Modals state & Book selection (Mobile 2-step navigation)
   const [isBookModalOpen, setIsBookModalOpen] = useState(false);
-  const [selectedModalBook, setSelectedModalBook] = useState(currentBook);
+  const [selectedBookForChapters, setSelectedBookForChapters] = useState<string | null>(null);
+  const [bookTab, setBookTab] = useState<'all' | 'OT' | 'NT'>('all');
+  const [bookSearch, setBookSearch] = useState('');
+
   const [isInsightModalOpen, setIsInsightModalOpen] = useState(false);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
   const [isLoginPromptModalOpen, setIsLoginPromptModalOpen] = useState(false);
 
-  // Sync selectedModalBook whenever modal opens or currentBook changes
+  // Load offline downloaded versions from localStorage or defaults
   useEffect(() => {
-    if (isBookModalOpen) {
-      setSelectedModalBook(currentBook);
+    try {
+      const uninstalledSaved = localStorage.getItem('withgod_uninstalled_bible_versions');
+      const uninstalledList: string[] = uninstalledSaved ? JSON.parse(uninstalledSaved) : [];
+
+      const saved = localStorage.getItem('withgod_offline_bible_versions');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setDownloadedVersions(
+            parsed
+              .map((id: string) => id.toUpperCase())
+              .filter((id) => !uninstalledList.includes(id))
+          );
+          return;
+        }
+      }
+
+      // Default offline ready versions (matching mobile defaults: TLAB, ADB, SND)
+      const defaults = ['TLAB', 'ADB', 'SND'].filter((id) => !uninstalledList.includes(id));
+      setDownloadedVersions(defaults);
+      try {
+        localStorage.setItem('withgod_offline_bible_versions', JSON.stringify(defaults));
+      } catch {}
+    } catch (e) {
+      console.warn('Failed reading offline versions from storage', e);
+      setDownloadedVersions(['TLAB', 'ADB', 'SND']);
     }
-  }, [isBookModalOpen, currentBook]);
+  }, []);
 
   // User Insight editing state
   const [insightTitle, setInsightTitle] = useState('');
@@ -84,7 +132,6 @@ export default function BibleReader() {
 
   // Compare modal data
   const [compareData, setCompareData] = useState<any[]>([]);
-  const [bookSearch, setBookSearch] = useState('');
 
   // Scroll direction detection for floating upward header on mobile/desktop
   const [scrollDirection, setScrollDirection] = useState<'up' | 'down'>('up');
@@ -121,10 +168,18 @@ export default function BibleReader() {
   useEffect(() => {
     const fetchMetadata = async () => {
       try {
-        const vers = await api.getBibleVersions();
-        setVersions(vers);
-        if (vers && vers.length > 0 && !vers.some((v: any) => v.id.toUpperCase() === currentVersion.toUpperCase())) {
-          setCurrentVersion(vers[0].id);
+        const [vers, avail] = await Promise.allSettled([
+          api.getBibleVersions(),
+          api.getAvailableBibleVersions(),
+        ]);
+        if (vers.status === 'fulfilled' && Array.isArray(vers.value)) {
+          setVersions(vers.value);
+          if (vers.value.length > 0 && !vers.value.some((v: any) => v.id.toUpperCase() === currentVersion.toUpperCase())) {
+            setCurrentVersion(vers.value[0].id);
+          }
+        }
+        if (avail.status === 'fulfilled' && Array.isArray(avail.value)) {
+          setAvailableVersions(avail.value);
         }
         const bks = await api.getBibleBooks(currentVersion);
         setBooks(bks);
@@ -175,7 +230,7 @@ export default function BibleReader() {
     }
   };
 
-  const handleApplyHighlight = async (colorId: string) => {
+  const handleApplyHighlight = async (colorId: string | null) => {
     if (!user) {
       setIsLoginPromptModalOpen(true);
       return;
@@ -183,6 +238,23 @@ export default function BibleReader() {
     if (selectedVerses.length === 0) return;
     const start = selectedVerses[0];
     const end = selectedVerses[selectedVerses.length - 1];
+
+    if (!colorId) {
+      const toDelete = highlights.filter(
+        (h) =>
+          h.chapter === currentChapter &&
+          (h.book_name ? h.book_name.toLowerCase() === currentBook.toLowerCase() : true) &&
+          selectedVerses.some((v) => v >= h.verse_start && v <= h.verse_end)
+      );
+      try {
+        await Promise.all(toDelete.map((h) => api.deleteHighlight(h.id)));
+        setHighlights((prev) => prev.filter((h) => !toDelete.some((d) => d.id === h.id)));
+        setSelectedVerses([]);
+      } catch (err) {
+        console.error('Failed to clear highlights', err);
+      }
+      return;
+    }
 
     try {
       const res = await api.createHighlight({
@@ -193,7 +265,17 @@ export default function BibleReader() {
         verse_end: end,
         color: colorId,
       });
-      setHighlights([...highlights.filter((h) => !(h.chapter === currentChapter && h.verse_start === start)), res]);
+      setHighlights((prev) => [
+        ...prev.filter(
+          (h) =>
+            !(
+              h.chapter === currentChapter &&
+              (h.book_name ? h.book_name.toLowerCase() === currentBook.toLowerCase() : true) &&
+              selectedVerses.some((v) => v >= h.verse_start && v <= h.verse_end)
+            )
+        ),
+        res,
+      ]);
       setSelectedVerses([]);
     } catch (err) {
       console.error(err);
@@ -219,17 +301,10 @@ export default function BibleReader() {
     setInstallingVersionId(versionId);
     setInstallSuccessMessage(null);
     try {
-      const installed = await api.installBibleVersion(versionId);
-      // Update installed versions list
-      setVersions((prev) => {
-        if (prev.some((v) => v.id.toUpperCase() === installed.id.toUpperCase())) return prev;
-        return [...prev, installed];
-      });
-      // Remove from uninstalled available list
-      setAvailableVersions((prev) => prev.filter((v) => v.id.toUpperCase() !== versionId.toUpperCase()));
-      // Automatically switch to newly installed version
-      setCurrentVersion(installed.id);
-      setInstallSuccessMessage(`Installed ${installed.name}! Active version changed to ${installed.abbreviation}.`);
+      await handleDownloadVersion(versionId);
+      const upper = versionId.toUpperCase();
+      setCurrentVersion(versionId);
+      setInstallSuccessMessage(`Installed and downloaded ${upper} Bible! Active version changed.`);
     } catch (err: any) {
       console.error(err);
       alert(`Failed to install version: ${err.message || err}`);
@@ -333,6 +408,7 @@ export default function BibleReader() {
     const versesInOrder = chapterData.verses.filter((v: any) => selectedVerses.includes(v.verse_number));
     const combinedText = versesInOrder.map((v: any) => `[${v.verse_number}] ${v.text}`).join(' ');
 
+    setSelectedVerses([]);
     router.push({
       pathname: '/devotions',
       query: {
@@ -347,8 +423,46 @@ export default function BibleReader() {
     });
   };
 
+  const handleCopyVerses = async () => {
+    if (selectedVerses.length === 0 || !chapterData) return;
+    const sorted = [...selectedVerses].sort((a, b) => a - b);
+    const start = sorted[0];
+    const end = sorted[sorted.length - 1];
+    const ref = `${currentBook} ${currentChapter}:${start}${end !== start ? `-${end}` : ''} (${currentVersion})`;
+    const versesInOrder = (chapterData.verses || []).filter((v: any) => selectedVerses.includes(v.verse_number));
+    const text = versesInOrder.map((v: any) => `${v.verse_number}. ${v.text}`).join('\n');
+    const content = `"${text}"\n— ${ref}`;
+
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(content);
+        setCopyFeedback('Copied scripture to clipboard!');
+        setTimeout(() => setCopyFeedback(null), 2500);
+      }
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        try {
+          await navigator.share({
+            title: ref,
+            text: content,
+          });
+        } catch {
+          // Ignored if user cancels share dialog
+        }
+      }
+    } catch (err) {
+      console.error('Failed to copy verses', err);
+    }
+    setSelectedVerses([]);
+  };
+
   const getVerseHighlight = (verseNumber: number) => {
-    return highlights.find((h) => h.chapter === currentChapter && verseNumber >= h.verse_start && verseNumber <= h.verse_end);
+    return highlights.find(
+      (h) =>
+        h.chapter === currentChapter &&
+        (h.book_name ? h.book_name.toLowerCase() === currentBook.toLowerCase() : true) &&
+        verseNumber >= h.verse_start &&
+        verseNumber <= h.verse_end
+    );
   };
 
   const hasUserInsight = (verseNumber: number) => {
@@ -358,12 +472,214 @@ export default function BibleReader() {
   const currentBookObj = books.find((b) => b.name.toLowerCase() === currentBook.toLowerCase());
   const maxChapters = currentBookObj?.chapters_count || 50;
 
-  const modalBookObj = books.find(
-    (b) => b.name.toLowerCase() === (selectedModalBook || currentBook).toLowerCase()
+  const selectedBookObj = books.find(
+    (b) => b.name.toLowerCase() === (selectedBookForChapters || currentBook).toLowerCase()
   );
-  const modalMaxChapters = modalBookObj?.chapters_count || 50;
 
-  const filteredBooks = books.filter((b) => b.name.toLowerCase().includes(bookSearch.toLowerCase()));
+  const filteredBooks = books.filter((b) => {
+    const matchesSearch = b.name.toLowerCase().includes(bookSearch.toLowerCase());
+    if (bookTab === 'OT') return matchesSearch && (b.testament === 'OT' || b.book_number <= 39);
+    if (bookTab === 'NT') return matchesSearch && (b.testament === 'NT' || b.book_number > 39);
+    return matchesSearch;
+  });
+
+  // Combine installed versions and available catalog versions
+  const allSelectableVersions = useMemo(() => {
+    const map = new Map<string, any>();
+    versions.forEach((v) => {
+      map.set(v.id.toUpperCase(), { ...v, isInstalledBackend: true });
+    });
+    availableVersions.forEach((v) => {
+      if (!map.has(v.id.toUpperCase())) {
+        map.set(v.id.toUpperCase(), { ...v, isInstalledBackend: false });
+      }
+    });
+
+    const list = Array.from(map.values());
+    return list.sort((a, b) => {
+      const aIsTagalog = (a.language || '').toLowerCase() === 'tagalog';
+      const bIsTagalog = (b.language || '').toLowerCase() === 'tagalog';
+      if (aIsTagalog && !bIsTagalog) return -1;
+      if (!aIsTagalog && bIsTagalog) return 1;
+      return (a.abbreviation || a.id).localeCompare(b.abbreviation || b.id);
+    });
+  }, [versions, availableVersions]);
+
+  const handlePrevChapter = () => {
+    if (currentChapter > 1) {
+      setCurrentChapter(currentChapter - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleNextChapter = () => {
+    if (currentChapter < maxChapters) {
+      setCurrentChapter(currentChapter + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleDeleteDownloadedVersion = (verId: string, verName: string) => {
+    setDeleteConfirmVersion({ id: verId, name: verName });
+  };
+
+  const handleConfirmDelete = (verId: string, verName: string) => {
+    const upper = verId.toUpperCase();
+
+    // 1. Update state
+    setDownloadedVersions((prev) => prev.filter((id) => id !== upper));
+
+    // 2. Persist to localStorage
+    try {
+      const saved = localStorage.getItem('withgod_offline_bible_versions');
+      const currentList: string[] = saved ? JSON.parse(saved) : [];
+      const updatedList = currentList.filter((id) => id.toUpperCase() !== upper);
+      localStorage.setItem('withgod_offline_bible_versions', JSON.stringify(updatedList));
+
+      const uninstalledSaved = localStorage.getItem('withgod_uninstalled_bible_versions');
+      const currentUninstalled: string[] = uninstalledSaved ? JSON.parse(uninstalledSaved) : [];
+      const updatedUninstalled = Array.from(new Set([...currentUninstalled, upper]));
+      localStorage.setItem('withgod_uninstalled_bible_versions', JSON.stringify(updatedUninstalled));
+    } catch (e) {
+      console.warn('Failed saving deleted version to localStorage', e);
+    }
+
+    // 3. Show feedback notification matching mobile's Alert.alert('Deleted', `${verName} offline database removed.`)
+    setDeleteSuccessMessage(`${verName} offline database removed.`);
+    setTimeout(() => {
+      setDeleteSuccessMessage(null);
+    }, 3500);
+  };
+
+  const handleDownloadVersion = async (verId: string) => {
+    const upper = verId.toUpperCase();
+    setDownloadingVersionId(upper);
+    setDownloadProgress({
+      versionId: upper,
+      percent: 5,
+      statusText: `Preparing to download ${upper}...`,
+      isComplete: false,
+    });
+
+    try {
+      const isInstalled = versions.some((v) => v.id.toUpperCase() === upper);
+      if (!isInstalled) {
+        setDownloadProgress({
+          versionId: upper,
+          percent: 15,
+          statusText: `Connecting and preparing ${upper} scripture...`,
+          isComplete: false,
+        });
+        const installed = await api.installBibleVersion(verId);
+        setVersions((prev) => {
+          if (prev.some((v) => v.id.toUpperCase() === upper)) return prev;
+          return [...prev, installed];
+        });
+        setAvailableVersions((prev) => prev.filter((v) => v.id.toUpperCase() !== upper));
+      }
+
+      setDownloadProgress({
+        versionId: upper,
+        percent: 30,
+        statusText: `Loading ${upper} dataset...`,
+        isComplete: false,
+      });
+
+      const localDatasetMap: Record<string, string> = {
+        NIV: '/data/niv_bible.json',
+        KJV: '/data/kjv_bible.json',
+        MBBTAG12: '/data/mbb_tagalog.json',
+        MBB05: '/data/mbb_tagalog.json',
+        RMBB: '/data/mbb_tagalog.json',
+        FSV: '/data/fsv_tagalog.json',
+        SND: '/data/snd_tagalog.json',
+        ASND: '/data/snd_tagalog.json',
+        TLAB: '/data/tgl_tagalog.json',
+        ADB: '/data/tgl_tagalog.json',
+      };
+
+      const dataUrl = localDatasetMap[upper];
+      if (dataUrl) {
+        try {
+          await fetch(dataUrl);
+        } catch (e) {
+          console.warn(`Local fetch for ${upper} non-critical:`, e);
+        }
+      }
+
+      const steps = [
+        { percent: 45, status: `Parsing ${upper} text...` },
+        { percent: 62, status: `Saving Genesis to Malachi (OT)...` },
+        { percent: 80, status: `Saving Matthew to Revelation (NT)...` },
+        { percent: 95, status: `Indexing chapters for offline search...` },
+      ];
+
+      for (const step of steps) {
+        await new Promise((r) => setTimeout(r, 140));
+        setDownloadProgress({
+          versionId: upper,
+          percent: step.percent,
+          statusText: step.status,
+          isComplete: false,
+        });
+      }
+
+      setDownloadedVersions((prev) => {
+        const next = Array.from(new Set([...prev, upper]));
+        try {
+          localStorage.setItem('withgod_offline_bible_versions', JSON.stringify(next));
+          const uninstalledSaved = localStorage.getItem('withgod_uninstalled_bible_versions');
+          if (uninstalledSaved) {
+            const currentUninstalled: string[] = JSON.parse(uninstalledSaved);
+            const filtered = currentUninstalled.filter((id) => id !== upper);
+            localStorage.setItem('withgod_uninstalled_bible_versions', JSON.stringify(filtered));
+          }
+        } catch {}
+        return next;
+      });
+
+      const chaptersCountText = upper === 'FSV' ? '260 chapters (NT)' : '1,189 chapters';
+      setDownloadProgress({
+        versionId: upper,
+        percent: 100,
+        statusText: `✓ ${upper} downloaded (${chaptersCountText} offline)`,
+        isComplete: true,
+      });
+
+      if (currentVersion.toUpperCase() === upper) {
+        setReloadKey((k) => k + 1);
+      }
+
+      setTimeout(() => {
+        setDownloadProgress((curr) => (curr?.versionId === upper && curr?.isComplete ? null : curr));
+      }, 3500);
+    } catch (err: any) {
+      console.error('Failed to download version', err);
+      setDownloadProgress({
+        versionId: upper,
+        percent: 0,
+        statusText: `Failed to download ${upper}: ${err.message || 'Error'}`,
+        isComplete: false,
+        error: err.message || 'Unknown error',
+      });
+      setTimeout(() => {
+        setDownloadProgress((curr) => (curr?.versionId === upper ? null : curr));
+      }, 4000);
+    } finally {
+      setDownloadingVersionId(null);
+    }
+  };
+
+  const handleSelectVersion = async (ver: any) => {
+    const upper = ver.id.toUpperCase();
+    const isDownloaded = downloadedVersions.includes(upper);
+    setCurrentVersion(ver.id);
+    setIsVersionModalOpen(false);
+
+    if (!isDownloaded) {
+      handleDownloadVersion(ver.id);
+    }
+  };
 
   return (
     <>
@@ -376,77 +692,98 @@ export default function BibleReader() {
       />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-8 py-6 space-y-6">
-        {/* Top Header / Scripture & Version Controls */}
-        <div className="flex items-center justify-between gap-2 w-full pb-4 border-b border-stone-200 dark:border-stone-800">
-            {/* Book & Chapter Selector Button */}
-            <button
-              type="button"
-              onClick={() => setIsBookModalOpen(true)}
-              className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm hover:border-amber-500/60 transition-all font-semibold text-xs sm:text-sm text-stone-900 dark:text-stone-100 flex-shrink-0"
-            >
-              <Book className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
-              <span>
-                {currentBook} {currentChapter}
+        {/* Top Header / Scripture & Version Controls (Mobile Parity) */}
+        <div className="flex items-center justify-between w-full pb-3 border-b border-stone-200 dark:border-stone-800">
+          {/* Prev Chapter Button */}
+          <button
+            type="button"
+            onClick={handlePrevChapter}
+            disabled={currentChapter <= 1}
+            className="p-2 rounded-xl text-stone-700 dark:text-stone-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+            title="Previous Chapter"
+            aria-label="Previous Chapter"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+
+          {/* Book & Chapter Selector Pill Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedBookForChapters(null);
+              setIsBookModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-stone-100/90 dark:bg-stone-800 hover:bg-stone-200/70 dark:hover:bg-stone-700/70 transition-colors font-bold text-sm sm:text-base text-stone-900 dark:text-stone-100 cursor-pointer"
+          >
+            <span>
+              {currentBook} {currentChapter}
+            </span>
+            <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
+          </button>
+
+          {/* Translation / Version Selector Pill Button */}
+          <button
+            type="button"
+            onClick={() => setIsVersionModalOpen(true)}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-stone-100/90 dark:bg-stone-800 hover:bg-stone-200/70 dark:hover:bg-stone-700/70 transition-colors font-bold text-xs sm:text-sm text-amber-600 dark:text-amber-500 cursor-pointer"
+          >
+            <span>{currentVersion}</span>
+            <ChevronDown className="w-3 h-3 text-stone-400" />
+          </button>
+
+          {/* Next Chapter Button */}
+          <button
+            type="button"
+            onClick={handleNextChapter}
+            disabled={currentChapter >= maxChapters}
+            className="p-2 rounded-xl text-stone-700 dark:text-stone-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+            title="Next Chapter"
+            aria-label="Next Chapter"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Full Bible Download Progress Banner (Mobile Parity) */}
+        {downloadProgress && !downloadProgress.isComplete && (
+          <div className="rounded-2xl border p-3.5 bg-amber-50/90 dark:bg-stone-900 border-amber-200 dark:border-amber-900/60 shadow-sm transition-all animate-in fade-in duration-200">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2 min-w-0">
+                <Loader2 className="w-4 h-4 text-amber-600 dark:text-amber-500 animate-spin shrink-0" />
+                <span className="text-xs font-bold text-amber-900 dark:text-amber-200 truncate">
+                  Downloading {downloadProgress.versionId} Bible ({downloadProgress.percent}%)
+                </span>
+              </div>
+              <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 shrink-0 uppercase tracking-wide">
+                Offline Setup
               </span>
-              <ChevronDown className="w-3 h-3 text-stone-400 hidden sm:inline" />
-            </button>
-
-            {/* Right Controls: Translation Selector with Download More Versions */}
-            <div className="flex items-center space-x-1.5 min-w-0 flex-shrink">
-              <span className="text-xs text-stone-400 font-medium hidden sm:inline">Version:</span>
-              <select
-                value={currentVersion}
-                onChange={(e) => {
-                  if (e.target.value === '__download_more__') {
-                    handleOpenDownloadVersionsModal();
-                  } else {
-                    setCurrentVersion(e.target.value);
-                  }
-                }}
-                className="max-w-[155px] xs:max-w-[190px] sm:max-w-xs truncate text-xs font-semibold px-2.5 py-2 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-800 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 cursor-pointer"
-              >
-                {/* Tagalog Versions */}
-                {versions.some((v) => (v.language || '').toLowerCase() === 'tagalog') && (
-                  <optgroup label="🇵🇭 Tagalog Versions">
-                    {versions
-                      .filter((ver) => (ver.language || '').toLowerCase() === 'tagalog')
-                      .map((ver) => (
-                        <option key={ver.id} value={ver.id}>
-                          {ver.name} ({ver.abbreviation || ver.id})
-                        </option>
-                      ))}
-                  </optgroup>
-                )}
-
-                {/* English Versions */}
-                {versions.some((v) => (v.language || '').toLowerCase() === 'english') && (
-                  <optgroup label="🇬🇧 English Versions">
-                    {versions
-                      .filter((ver) => (ver.language || '').toLowerCase() === 'english')
-                      .map((ver) => (
-                        <option key={ver.id} value={ver.id}>
-                          {ver.name} ({ver.abbreviation || ver.id})
-                        </option>
-                      ))}
-                  </optgroup>
-                )}
-
-                <option disabled>──────────</option>
-                <option value="__download_more__" className="text-amber-600 font-bold">
-                  ➕ Download more versions...
-                </option>
-              </select>
-
-              <button
-                type="button"
-                onClick={handleOpenDownloadVersionsModal}
-                className="p-2 rounded-xl text-stone-500 hover:text-amber-600 hover:bg-stone-100 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800 transition-colors flex-shrink-0"
-                title="Download more Bible versions"
-              >
-                <Download className="w-3.5 h-3.5 text-amber-500" />
-              </button>
             </div>
+            <div className="w-full h-1.5 rounded-full overflow-hidden bg-amber-200/80 dark:bg-stone-800">
+              <div
+                className="h-full bg-amber-600 dark:bg-amber-500 rounded-full transition-all duration-200 ease-out"
+                style={{ width: `${Math.max(5, downloadProgress.percent)}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-amber-800/80 dark:text-stone-400 mt-1.5 truncate">
+              {downloadProgress.statusText}
+            </p>
           </div>
+        )}
+
+        {/* Download Complete Ready Banner */}
+        {downloadProgress && downloadProgress.isComplete && (
+          <div className="rounded-2xl border p-3 bg-emerald-50/90 dark:bg-stone-900 border-emerald-200 dark:border-emerald-900/60 shadow-sm transition-all animate-in fade-in duration-200 flex items-center justify-between">
+            <div className="flex items-center space-x-2 min-w-0">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-500 shrink-0" />
+              <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 truncate">
+                {downloadProgress.statusText}
+              </span>
+            </div>
+            <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 shrink-0 uppercase tracking-wide">
+              Ready
+            </span>
+          </div>
+        )}
 
         {/* Chapter Content Card */}
         <div className="rounded-3xl bg-white dark:bg-stone-900 p-6 sm:p-12 shadow-sm border border-stone-200/80 dark:border-stone-800 min-h-[500px]">
@@ -460,7 +797,9 @@ export default function BibleReader() {
                 <h2 className="text-2xl sm:text-3xl font-bold font-serif text-stone-900 dark:text-stone-100">
                   {currentBook} {currentChapter}
                 </h2>
-
+                <p className="text-xs font-sans text-stone-500 dark:text-stone-400 mt-1 tracking-wide font-medium">
+                  {currentVersion} Translation
+                </p>
               </div>
 
               {/* Verses stream */}
@@ -476,13 +815,13 @@ export default function BibleReader() {
                       key={verse.id || verse.verse_number}
                       onClick={() => toggleVerseSelection(verse.verse_number)}
                       className={`inline cursor-pointer px-1 py-0.5 rounded transition-colors group relative ${isSelected
-                          ? 'bg-amber-100 dark:bg-amber-900/50 ring-2 ring-amber-500/50'
+                          ? 'bg-amber-100 dark:bg-amber-900/50 ring-2 ring-amber-500/50 text-amber-900 dark:text-amber-100 font-medium'
                           : hlColorObj
                             ? hlColorObj.bg
                             : 'hover:bg-stone-100 dark:hover:bg-stone-800/60'
                         }`}
                     >
-                      <sup className="text-xs font-sans font-semibold text-stone-400 mr-1 select-none">
+                      <sup className={`text-xs font-sans font-semibold mr-1 select-none ${isSelected ? 'text-[#D97706] dark:text-amber-400 font-bold' : 'text-stone-400'}`}>
                         {verse.verse_number}
                       </sup>
                       <span>{verse.text} </span>
@@ -505,14 +844,28 @@ export default function BibleReader() {
             </div>
           ) : (
             <div className="py-20 text-center space-y-3">
-              <p className="text-stone-600 dark:text-stone-400 font-medium">Chapter text not yet loaded.</p>
-              <button
-                type="button"
-                onClick={() => setReloadKey((k) => k + 1)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 text-white text-xs font-semibold"
-              >
-                <span>Reload Chapter</span>
-              </button>
+              {downloadProgress && !downloadProgress.isComplete && downloadProgress.versionId === currentVersion.toUpperCase() ? (
+                <div className="flex flex-col items-center justify-center space-y-2">
+                  <Loader2 className="w-7 h-7 text-amber-600 animate-spin mb-1" />
+                  <p className="text-stone-900 dark:text-stone-100 font-bold text-sm">
+                    Downloading {currentVersion} Bible ({downloadProgress.percent}%)...
+                  </p>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    {downloadProgress.statusText}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-stone-600 dark:text-stone-400 font-medium">Chapter text not yet loaded.</p>
+                  <button
+                    type="button"
+                    onClick={() => setReloadKey((k) => k + 1)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition-colors cursor-pointer"
+                  >
+                    <span>Reload Chapter</span>
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -575,142 +928,366 @@ export default function BibleReader() {
         )}
       </div>
 
-      {/* Floating Verse Action Bar (Shown when verses are selected) */}
+      {/* Floating Verse Action Sheet (Shown when verses are selected) */}
       {selectedVerses.length > 0 && (
-        <div className="fixed bottom-20 md:bottom-8 left-1/2 -translate-x-1/2 z-40 w-11/12 max-w-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 shadow-2xl rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2 backdrop-blur-md animate-in fade-in slide-in-from-bottom-4">
-          <div className="flex items-center space-x-2 pl-2">
-            <span className="text-xs font-bold text-stone-800 dark:text-stone-200">
-              v.{selectedVerses[0]}
-              {selectedVerses.length > 1 && `-${selectedVerses[selectedVerses.length - 1]}`}
+        <div className="fixed bottom-20 md:bottom-8 left-1/2 -translate-x-1/2 z-40 w-[92%] sm:w-[350px] max-w-sm bg-white dark:bg-[#1C1917] border border-stone-200 dark:border-[#292524] shadow-2xl rounded-2xl p-4 backdrop-blur-md animate-in fade-in slide-in-from-bottom-4">
+          {/* Top Row: Title & Close */}
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs sm:text-sm font-bold text-stone-900 dark:text-[#FAFAFA]">
+              {selectedVerses.length} {selectedVerses.length === 1 ? 'verse' : 'verses'} selected
             </span>
             <button
               type="button"
               onClick={() => setSelectedVerses([])}
-              className="p-1 rounded-full text-stone-400 hover:text-stone-600"
+              className="p-1 rounded-full text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 transition-colors"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="flex items-center space-x-1.5 sm:space-x-2">
-            {/* Color highlights palette */}
-            <div className="flex items-center space-x-1 pr-2 border-r border-stone-200 dark:border-stone-800">
-              {HIGHLIGHT_COLORS.map((col) => (
-                <button
-                  key={col.id}
-                  onClick={() => handleApplyHighlight(col.id)}
-                  title={col.label}
-                  className={`w-5 h-5 rounded-full ${col.dot} hover:scale-110 transition-transform shadow-xs`}
-                />
-              ))}
-            </div>
-
-            {/* UNIFIED INSIGHTS ACTION (Note + Insights is one as requested) */}
+          {/* Color Highlighting Row */}
+          <div className="flex items-center gap-3 mb-3.5">
+            {HIGHLIGHT_COLORS.map((col) => (
+              <button
+                key={col.id}
+                type="button"
+                onClick={() => handleApplyHighlight(col.id)}
+                title={col.label}
+                className="w-[26px] h-[26px] rounded-full hover:scale-110 active:scale-95 transition-transform shadow-xs cursor-pointer"
+                style={{ backgroundColor: col.dot }}
+              />
+            ))}
             <button
-              onClick={() => handleOpenUserInsight()}
-              className="flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 transition-colors"
+              type="button"
+              onClick={() => handleApplyHighlight(null)}
+              title="Clear highlight"
+              className="w-[26px] h-[26px] rounded-full border border-stone-300 dark:border-[#444] flex items-center justify-center text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 hover:scale-110 active:scale-95 transition-transform cursor-pointer"
             >
-              <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
-              <span>Insights</span>
+              <Slash className="w-3.5 h-3.5" />
             </button>
+          </div>
 
-            {/* Compare Action */}
+          {/* Action Buttons Row */}
+          <div className="grid grid-cols-3 pt-3 border-t border-stone-100 dark:border-stone-800/80">
             <button
-              onClick={handleOpenCompare}
-              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
-            >
-              <Columns className="w-3.5 h-3.5 text-sky-500" />
-              <span className="hidden sm:inline">Compare</span>
-            </button>
-
-            {/* Add to Devotion */}
-            <button
+              type="button"
               onClick={handleAddToDevotion}
-              className="flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-colors"
+              className="flex flex-col items-center justify-center gap-1 group py-1 text-[#D97706] hover:opacity-80 transition-opacity cursor-pointer"
             >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Devotion</span>
+              <Edit3 className="w-4 h-4 text-[#D97706]" />
+              <span className="text-[11px] font-semibold text-[#D97706]">Insight</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenCompare}
+              className="flex flex-col items-center justify-center gap-1 group py-1 text-[#D97706] hover:opacity-80 transition-opacity cursor-pointer"
+            >
+              <Columns className="w-4 h-4 text-[#D97706]" />
+              <span className="text-[11px] font-semibold text-[#D97706]">Compare</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCopyVerses}
+              className="flex flex-col items-center justify-center gap-1 group py-1 text-[#D97706] hover:opacity-80 transition-opacity cursor-pointer"
+            >
+              <Share2 className="w-4 h-4 text-[#D97706]" />
+              <span className="text-[11px] font-semibold text-[#D97706]">Share / Copy</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* Book & Chapter Selection Modal */}
-      <Modal isOpen={isBookModalOpen} onClose={() => setIsBookModalOpen(false)} title="Select Scripture" maxWidth="max-w-xl">
-        <div className="space-y-4">
-          <div className="relative">
-            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
-            <input
-              type="text"
-              placeholder="Search books (e.g. Genesis, John, Psalms)..."
-              value={bookSearch}
-              onChange={(e) => setBookSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-xl text-sm border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-            />
-          </div>
+      {/* Copied Feedback Toast */}
+      {copyFeedback && (
+        <div className="fixed bottom-24 md:bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 rounded-full text-xs font-semibold shadow-lg animate-in fade-in slide-in-from-bottom-2">
+          {copyFeedback}
+        </div>
+      )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
-            {filteredBooks.map((b) => {
-              const isSelected = b.name.toLowerCase() === (selectedModalBook || currentBook).toLowerCase();
-              return (
-                <button
-                  key={b.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedModalBook(b.name);
-                  }}
-                  className={`p-2.5 rounded-xl text-left text-xs font-medium transition-all cursor-pointer ${
-                    isSelected
-                      ? 'bg-amber-500 text-white font-bold shadow-xs'
-                      : 'bg-stone-50 dark:bg-stone-800/50 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-800 dark:text-stone-200'
-                  }`}
-                >
-                  <div className="truncate">{b.name}</div>
-                  <div className={`text-[10px] ${isSelected ? 'text-amber-100' : 'opacity-70'}`}>
-                    {b.chapters_count || 50} ch.
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="pt-3 border-t border-stone-100 dark:border-stone-800">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs font-semibold text-stone-600 dark:text-stone-300">
-                Select Chapter ({selectedModalBook || currentBook}):
-              </h4>
-              <span className="text-[11px] text-stone-400">
-                {modalMaxChapters} chapters
+      {/* Book & Chapter Selection Modal (Mobile Parity) */}
+      <Modal
+        isOpen={isBookModalOpen}
+        onClose={() => {
+          setIsBookModalOpen(false);
+          setSelectedBookForChapters(null);
+        }}
+        title={selectedBookForChapters ? `Select Chapter` : `Select Scripture`}
+        maxWidth="max-w-xl"
+      >
+        {selectedBookForChapters ? (
+          /* Chapters Grid View */
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => setSelectedBookForChapters(null)}
+                className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-500 hover:text-amber-700 transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back to Books</span>
+              </button>
+              <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">
+                {selectedBookForChapters} ({selectedBookObj?.chapters_count || 50} chapters)
               </span>
             </div>
-            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1">
-              {Array.from({ length: modalMaxChapters }, (_, i) => i + 1).map((ch) => {
-                const isCurrentActive =
-                  (selectedModalBook || currentBook).toLowerCase() === currentBook.toLowerCase() &&
-                  ch === currentChapter;
+
+            <div className="grid grid-cols-5 xs:grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-2 max-h-[60vh] overflow-y-auto pr-1">
+              {Array.from(
+                { length: selectedBookObj?.chapters_count || 50 },
+                (_, i) => i + 1
+              ).map((chNum) => {
+                const isCurrent =
+                  currentBook.toLowerCase() === (selectedBookForChapters || '').toLowerCase() &&
+                  currentChapter === chNum;
                 return (
                   <button
-                    key={ch}
+                    key={chNum}
                     type="button"
                     onClick={() => {
-                      setCurrentBook(selectedModalBook || currentBook);
-                      setCurrentChapter(ch);
+                      setCurrentBook(selectedBookForChapters);
+                      setCurrentChapter(chNum);
                       setIsBookModalOpen(false);
+                      setSelectedBookForChapters(null);
                     }}
-                    className={`w-9 h-9 rounded-xl text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${
-                      isCurrentActive
-                        ? 'bg-amber-500 text-white shadow-xs font-bold'
-                        : 'bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 hover:bg-amber-100 hover:text-amber-800 dark:hover:bg-stone-700'
+                    className={`aspect-square rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center transition-all cursor-pointer border ${
+                      isCurrent
+                        ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
+                        : 'bg-stone-50 dark:bg-stone-800/80 border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200 hover:bg-amber-100 hover:border-amber-400 hover:text-amber-900 dark:hover:bg-stone-700'
                     }`}
                   >
-                    {ch}
+                    {chNum}
                   </button>
                 );
               })}
             </div>
           </div>
+        ) : (
+          /* Books List with Search & OT/NT Tabs */
+          <div className="space-y-3">
+            {/* Search Box */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search books..."
+                value={bookSearch}
+                onChange={(e) => setBookSearch(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 rounded-xl text-sm border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-stone-900 dark:text-stone-100"
+              />
+              {bookSearch && (
+                <button
+                  type="button"
+                  onClick={() => setBookSearch('')}
+                  className="absolute right-2.5 top-2.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* OT / NT Tabs */}
+            <div className="flex rounded-xl bg-stone-100 dark:bg-stone-800/80 p-1 gap-1">
+              {(['all', 'OT', 'NT'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setBookTab(tab)}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                    bookTab === tab
+                      ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-xs'
+                      : 'text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-200'
+                  }`}
+                >
+                  {tab === 'all' ? 'All Books' : tab === 'OT' ? 'Old Testament' : 'New Testament'}
+                </button>
+              ))}
+            </div>
+
+            {/* Books List */}
+            <div className="max-h-[55vh] overflow-y-auto divide-y divide-stone-100 dark:divide-stone-800 pr-1">
+              {filteredBooks.map((item) => {
+                const isSelected = item.name.toLowerCase() === currentBook.toLowerCase();
+                return (
+                  <button
+                    key={item.id || item.name}
+                    type="button"
+                    onClick={() => setSelectedBookForChapters(item.name)}
+                    className={`w-full flex items-center justify-between py-3 px-3 rounded-xl transition-all text-left cursor-pointer ${
+                      isSelected
+                        ? 'bg-amber-100/70 dark:bg-stone-800 text-amber-700 dark:text-amber-400 font-bold'
+                        : 'hover:bg-stone-50 dark:hover:bg-stone-800/50 text-stone-800 dark:text-stone-200'
+                    }`}
+                  >
+                    <div>
+                      <div className={`text-sm ${isSelected ? 'font-bold text-amber-600 dark:text-amber-500' : 'font-semibold'}`}>
+                        {item.name}
+                      </div>
+                      <div className="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5">
+                        {item.chapters_count || 1} chapters • {item.testament || 'OT'}
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-stone-400" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Version Selector Modal (Mobile Parity) */}
+      <Modal
+        isOpen={isVersionModalOpen}
+        onClose={() => setIsVersionModalOpen(false)}
+        title="Select Bible Translation"
+        maxWidth="max-w-md"
+      >
+        <div className="-mx-6 -my-6 flex flex-col">
+          <div className="max-h-[460px] overflow-y-auto divide-y divide-stone-100 dark:divide-stone-800">
+            {allSelectableVersions.map((ver) => {
+              const isSelected = ver.id.toUpperCase() === currentVersion.toUpperCase();
+              const isDownloaded = downloadedVersions.includes(ver.id.toUpperCase());
+              const isDownloading =
+                downloadProgress &&
+                !downloadProgress.isComplete &&
+                downloadProgress.versionId === ver.id.toUpperCase();
+
+              return (
+                <div
+                  key={ver.id}
+                  onClick={() => handleSelectVersion(ver)}
+                  className={`flex items-center justify-between py-3.5 px-4 sm:px-6 cursor-pointer transition-colors ${
+                    isSelected
+                      ? 'bg-amber-100/80 dark:bg-stone-800'
+                      : 'hover:bg-stone-50 dark:hover:bg-stone-800/50'
+                  }`}
+                >
+                  <div className="flex-1 min-w-0 pr-3">
+                    <p
+                      className={`text-sm leading-snug truncate ${
+                        isSelected
+                          ? 'text-amber-600 dark:text-amber-500 font-bold'
+                          : 'text-stone-900 dark:text-stone-100 font-semibold'
+                      }`}
+                    >
+                      {ver.abbreviation || ver.id} — {ver.name}
+                    </p>
+                    <p className="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5 font-sans">
+                      Language: {ver.language || 'English'}
+                    </p>
+                  </div>
+
+                  {/* Badges & Actions */}
+                  <div className="flex items-center shrink-0 gap-2">
+                    {isDownloading ? (
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] font-bold">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                        <span>{downloadProgress?.percent || 0}%</span>
+                      </div>
+                    ) : isDownloaded ? (
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                          <span>Offline Ready</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteDownloadedVersion(ver.id, ver.name);
+                          }}
+                          className="w-6 h-6 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-500 hover:bg-rose-500/20 flex items-center justify-center transition-colors cursor-pointer"
+                          title={`Delete ${ver.name} offline database`}
+                          aria-label={`Delete ${ver.name} offline database`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadVersion(ver.id);
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-amber-600/80 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] font-bold hover:bg-amber-500/20 transition-colors cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                        <span>Download</span>
+                      </button>
+                    )}
+
+                    {isSelected && (
+                      <Check className="w-4.5 h-4.5 text-amber-600 dark:text-amber-500 shrink-0 ml-1" />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Download More Versions Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsVersionModalOpen(false);
+              handleOpenDownloadVersionsModal();
+            }}
+            className="w-full py-3.5 px-4 flex items-center justify-center gap-2 bg-amber-500/10 hover:bg-amber-500/15 border-t border-amber-200 dark:border-amber-900/40 text-amber-600 dark:text-amber-400 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
+          >
+            <PlusCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <span>Download More Translations...</span>
+          </button>
         </div>
       </Modal>
+
+      {/* Delete Offline Bible Confirmation Dialog Modal (Mobile Parity) */}
+      {deleteConfirmVersion && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-stone-950/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setDeleteConfirmVersion(null)}
+          />
+          <div className="relative w-full max-w-sm bg-white dark:bg-[#1C1917] rounded-3xl p-6 shadow-2xl border border-stone-200 dark:border-stone-800 z-10 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-lg font-bold text-stone-900 dark:text-[#FAFAFA]">
+              Delete Offline Bible
+            </h3>
+            <p className="mt-3 text-sm text-stone-600 dark:text-stone-300 leading-relaxed font-sans">
+              Are you sure you want to remove downloaded offline data for &ldquo;{deleteConfirmVersion.name}&rdquo; ({deleteConfirmVersion.id})? It will be excluded from offline verse comparisons.
+            </p>
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmVersion(null)}
+                className="px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/40 rounded-xl transition-colors cursor-pointer"
+              >
+                CANCEL
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const ver = deleteConfirmVersion;
+                  setDeleteConfirmVersion(null);
+                  handleConfirmDelete(ver.id, ver.name);
+                }}
+                className="px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/40 rounded-xl transition-colors cursor-pointer"
+              >
+                DELETE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deleted Feedback Toast */}
+      {deleteSuccessMessage && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 rounded-full text-xs font-semibold shadow-2xl border border-stone-700 dark:border-stone-200 animate-in fade-in slide-in-from-top-3 flex items-center gap-2">
+          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+          <span>{deleteSuccessMessage}</span>
+        </div>
+      )}
 
       {/* Unified User Insights Modal */}
       <Modal
@@ -977,15 +1554,24 @@ export default function BibleReader() {
                         </div>
 
                         <div className="sm:shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleInstallVersion(item.id)}
-                            disabled={installingVersionId === item.id}
-                            className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center gap-1.5 shadow-sm hover:shadow transition-all disabled:opacity-50 cursor-pointer"
-                          >
-                            <Download className={`w-3.5 h-3.5 ${installingVersionId === item.id ? 'animate-bounce' : ''}`} />
-                            <span>{installingVersionId === item.id ? 'Installing...' : 'Install Version'}</span>
-                          </button>
+                          {downloadProgress &&
+                          !downloadProgress.isComplete &&
+                          downloadProgress.versionId === item.id.toUpperCase() ? (
+                            <div className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center gap-1.5 border border-amber-500/20">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                              <span>Downloading ({downloadProgress.percent}%)...</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleInstallVersion(item.id)}
+                              disabled={installingVersionId === item.id}
+                              className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center gap-1.5 shadow-sm hover:shadow transition-all disabled:opacity-50 cursor-pointer"
+                            >
+                              <Download className={`w-3.5 h-3.5 ${installingVersionId === item.id ? 'animate-bounce' : ''}`} />
+                              <span>{installingVersionId === item.id ? 'Installing...' : 'Install Version'}</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}

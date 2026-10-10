@@ -4,54 +4,26 @@ import { useRouter } from 'next/router';
 import { Sun, Moon, ChevronRight, BookOpen, Bell, Check, Calendar, Clock, MapPin, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
+import { AiAnimatedEye } from './AiAnimatedEye';
 
 export const Navbar: React.FC = () => {
   const router = useRouter();
-  const { pageTitle, breadcrumbs, pageActions, theme, toggleTheme, user } = useApp();
+  const {
+    pageTitle,
+    breadcrumbs,
+    pageActions,
+    theme,
+    toggleTheme,
+    user,
+    setIsAiModalOpen,
+    eventNotifications: notifications = [],
+    unreadNotifCount: unreadCount = 0,
+    markNotificationRead,
+    markAllNotificationsRead,
+  } = useApp();
 
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
-
-  const fetchNotifications = async () => {
-    try {
-      const data = await api.getEventNotifications();
-      if (data && Array.isArray(data.notifications)) {
-        setNotifications(data.notifications);
-        setUnreadCount(data.unread_count || 0);
-
-        // Check for browser notification trigger if supported
-        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-          // Find unread notification scheduled recently (within last 5 minutes)
-          const now = new Date().getTime();
-          data.notifications.forEach((n: any) => {
-            if (!n.is_read_by_user) {
-              const sched = new Date(n.scheduled_for).getTime();
-              if (now >= sched && now - sched < 5 * 60 * 1000) {
-                const shownKey = `withgod_notif_shown_${n.id}`;
-                if (!sessionStorage.getItem(shownKey)) {
-                  sessionStorage.setItem(shownKey, 'true');
-                  new Notification(n.title, {
-                    body: n.message || `Event: ${n.event_title} on ${n.event_date}`,
-                    icon: '/favicon.ico',
-                  });
-                }
-              }
-            }
-          });
-        }
-      }
-    } catch {
-      // Ignore background notification fetch errors
-    }
-  };
-
-  useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 45000);
-    return () => clearInterval(interval);
-  }, [user]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -73,24 +45,12 @@ export const Navbar: React.FC = () => {
 
   const handleMarkAllRead = async () => {
     if (!user) return;
-    try {
-      await api.markAllNotificationsRead();
-      setNotifications(notifications.map((n) => ({ ...n, is_read_by_user: true })));
-      setUnreadCount(0);
-    } catch (err) {
-      console.error(err);
-    }
+    await markAllNotificationsRead();
   };
 
   const handleMarkOneRead = async (id: string) => {
     if (!user) return;
-    try {
-      await api.markNotificationRead(id);
-      setNotifications(notifications.map((n) => (n.id === id ? { ...n, is_read_by_user: true } : n)));
-      setUnreadCount(Math.max(0, unreadCount - 1));
-    } catch (err) {
-      console.error(err);
-    }
+    await markNotificationRead(id);
   };
 
   return (
@@ -98,13 +58,21 @@ export const Navbar: React.FC = () => {
       <div className="flex items-center justify-between h-16 px-4 sm:px-8">
         {/* Left side: Breadcrumbs & Mobile Brand */}
         <div className="flex items-center space-x-3">
-          {/* Mobile brand indicator */}
-          <Link href="/" className="md:hidden flex items-center space-x-2 mr-2">
-            <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center text-white shadow-sm">
-              <BookOpen className="w-3.5 h-3.5" />
-            </div>
-            <span className="font-bold text-base text-stone-900 dark:text-stone-100">WithGod</span>
-          </Link>
+          {/* Mobile brand & title indicator */}
+          <div className="md:hidden flex items-center space-x-2 mr-2 min-w-0">
+            <Link href="/" className="flex items-center space-x-1.5 shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center text-white shadow-sm">
+                <BookOpen className="w-3.5 h-3.5" />
+              </div>
+              <span className="font-bold text-base text-stone-900 dark:text-stone-100">Shema</span>
+            </Link>
+            {pageTitle && pageTitle !== 'Shema' && (
+              <div className="flex items-center space-x-1.5 text-xs text-stone-400 dark:text-stone-500 font-medium truncate max-w-[130px] sm:max-w-xs">
+                <span>/</span>
+                <span className="text-stone-700 dark:text-stone-300 truncate font-semibold">{pageTitle}</span>
+              </div>
+            )}
+          </div>
 
           {/* Breadcrumbs with gap-1.5 */}
           <nav className="hidden sm:flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
@@ -134,6 +102,17 @@ export const Navbar: React.FC = () => {
         <div className="flex items-center space-x-2 sm:space-x-3">
           {/* Dynamic action buttons if passed from page */}
           {pageActions && <div className="flex items-center space-x-2">{pageActions}</div>}
+
+          {/* Desktop Shalom AI Trigger */}
+          <button
+            type="button"
+            onClick={() => setIsAiModalOpen(true)}
+            className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-semibold shadow-xs transition-all hover:scale-102 cursor-pointer"
+            title="Ask Shalom AI Assistant"
+          >
+            <AiAnimatedEye size={16} glowColor="#F59E0B" isPulsing={false} />
+            <span>Shalom AI</span>
+          </button>
 
           {/* Notification Bell with Dropdown */}
           <div className="relative" ref={notifRef}>

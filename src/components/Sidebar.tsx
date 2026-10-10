@@ -1,12 +1,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { BookOpen, Home, Edit3, Compass, Bookmark, Settings, Shield, Languages, Scroll, Calendar, Users, Flame } from 'lucide-react';
+import { BookOpen, Home, Edit3, Compass, Bookmark, Settings, Shield, Languages, Scroll, Calendar, Users, Flame, MessageCircle, Sparkles } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { AiAnimatedEye } from './AiAnimatedEye';
 
 export const Sidebar: React.FC = () => {
   const router = useRouter();
-  const { user } = useApp();
+  const { user, setIsAiModalOpen } = useApp();
 
   const navItems = user
     ? [
@@ -14,9 +15,10 @@ export const Sidebar: React.FC = () => {
         { label: 'Bible', href: '/bible', icon: BookOpen },
         { label: 'Torah Portion', href: '/torah', icon: Scroll },
         { label: 'Biblical Feasts', href: '/feasts', icon: Flame },
+        { label: 'Chats', href: '/chat', icon: MessageCircle },
         { label: 'Calendar', href: '/calendar', icon: Calendar },
-        { label: 'Devotions', href: '/devotions', icon: Edit3 },
-        { label: 'Insights', href: '/study', icon: Bookmark },
+        { label: 'Insights & Devotions', href: '/devotions', icon: Edit3 },
+        { label: 'Highlighted Verses', href: '/study', icon: Bookmark },
         { label: 'Learn Hebrew', href: '/hebrew', icon: Languages },
         { label: 'Discover', href: '/discover', icon: Compass },
         { label: 'Profile', href: '/profile', icon: Settings },
@@ -51,14 +53,38 @@ export const Sidebar: React.FC = () => {
             <BookOpen className="w-4 h-4" />
           </div>
           <div>
-            <span className="font-bold text-lg tracking-tight text-stone-900 dark:text-stone-100">WithGod</span>
+            <span className="font-bold text-lg tracking-tight text-stone-900 dark:text-stone-100">Shema</span>
             <span className="text-[10px] uppercase font-semibold text-amber-600 dark:text-amber-400 block -mt-1 tracking-wider">Bible & Journal</span>
           </div>
         </Link>
       </div>
 
       {/* Navigation links */}
-      <div className="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto">
+      <div className="flex-1 py-4 px-4 space-y-1.5 overflow-y-auto">
+        {/* Shalom AI Assistant Button */}
+        <div className="pb-3">
+          <button
+            type="button"
+            onClick={() => setIsAiModalOpen(true)}
+            className="w-full flex items-center justify-between p-2.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-amber-500/5 border border-amber-500/30 hover:border-amber-500/60 transition-all hover:scale-[1.02] active:scale-[0.98] group cursor-pointer shadow-xs text-left"
+          >
+            <div className="flex items-center space-x-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-white dark:bg-stone-800 border border-amber-500/40 shadow-xs flex items-center justify-center shrink-0">
+                <AiAnimatedEye size={18} glowColor="#F59E0B" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-amber-900 dark:text-amber-200 block truncate">
+                  Shalom AI
+                </span>
+                <span className="text-[10px] text-amber-700/80 dark:text-amber-400/80 block -mt-0.5 truncate">
+                  Scripture Assistant
+                </span>
+              </div>
+            </div>
+            <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 group-hover:rotate-12 transition-transform" />
+          </button>
+        </div>
+
         <div className="px-3 pb-2 text-[11px] font-semibold text-stone-400 dark:text-stone-500 uppercase tracking-wider">
           Main Menu
         </div>

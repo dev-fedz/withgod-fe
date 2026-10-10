@@ -8,7 +8,7 @@ export default function App({ Component, pageProps }: AppProps) {
   return (
     <AppProvider>
       <Head>
-        <title>WithGod — Bible & Devotions</title>
+        <title>Shema — Bible & Devotions</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
         <meta name="description" content="A youth-friendly personal Bible reader and devotion notebook" />
         <link rel="icon" href="/favicon.ico" />

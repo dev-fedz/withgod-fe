@@ -52,6 +52,15 @@ interface AppContextType {
   setCurrentChapter: (ch: number) => void;
   theme: 'light' | 'dark';
   toggleTheme: () => void;
+  geminiApiKey: string;
+  setGeminiApiKey: (key: string) => void;
+  isAiModalOpen: boolean;
+  setIsAiModalOpen: (open: boolean) => void;
+  eventNotifications: any[];
+  unreadNotifCount: number;
+  refreshEventNotifications: () => Promise<void>;
+  markNotificationRead: (id: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -59,7 +68,9 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [pageTitle, setPageTitle] = useState('WithGod');
+  const [geminiApiKey, setGeminiApiKeyState] = useState<string>('');
+  const [isAiModalOpen, setIsAiModalOpen] = useState<boolean>(false);
+  const [pageTitle, setPageTitle] = useState('Shema');
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([]);
   const [pageActions, setPageActions] = useState<React.ReactNode>(null);
 
@@ -137,6 +148,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const setGeminiApiKey = (key: string) => {
+    setGeminiApiKeyState(key);
+    if (typeof window !== 'undefined') {
+      if (key) {
+        localStorage.setItem('withgod_gemini_api_key', key);
+      } else {
+        localStorage.removeItem('withgod_gemini_api_key');
+      }
+    }
+  };
+
   useEffect(() => {
     // Restore theme
     const savedTheme = localStorage.getItem('withgod_theme') as 'light' | 'dark' | null;
@@ -158,6 +180,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (savedChapter) {
       const parsed = parseInt(savedChapter, 10);
       if (!isNaN(parsed)) setCurrentChapterState(parsed);
+    }
+
+    // Restore Gemini API Key
+    const savedGeminiKey = localStorage.getItem('withgod_gemini_api_key');
+    if (savedGeminiKey) {
+      setGeminiApiKeyState(savedGeminiKey);
     }
 
     refreshUser();
@@ -185,6 +213,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     api.clearTokens();
     setUser(null);
   };
+
+  // Event Notifications & Announcements State
+  const [eventNotifications, setEventNotifications] = useState<any[]>([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState<number>(0);
+
+  const refreshEventNotifications = React.useCallback(async () => {
+    try {
+      const data = await api.getEventNotifications();
+      if (data && Array.isArray(data.notifications)) {
+        setEventNotifications(data.notifications);
+        setUnreadNotifCount(data.unread_count || 0);
+
+        // Check for browser notification trigger if supported
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          const now = new Date().getTime();
+          data.notifications.forEach((n: any) => {
+            if (!n.is_read_by_user) {
+              const sched = new Date(n.scheduled_for).getTime();
+              if (now >= sched && now - sched < 5 * 60 * 1000) {
+                const shownKey = `withgod_notif_shown_${n.id}`;
+                if (!sessionStorage.getItem(shownKey)) {
+                  sessionStorage.setItem(shownKey, 'true');
+                  new Notification(n.title, {
+                    body: n.message || `Event: ${n.event_title} on ${n.event_date}`,
+                    icon: '/favicon.ico',
+                  });
+                }
+              }
+            }
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const markNotificationRead = React.useCallback(async (id: string) => {
+    try {
+      if (user) {
+        await api.markNotificationRead(id);
+      }
+      setEventNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_read_by_user: true } : n))
+      );
+      setUnreadNotifCount((prev) => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error(err);
+    }
+  }, [user]);
+
+  const markAllNotificationsRead = React.useCallback(async () => {
+    if (!user) return;
+    try {
+      await api.markAllNotificationsRead();
+      setEventNotifications((prev) => prev.map((n) => ({ ...n, is_read_by_user: true })));
+      setUnreadNotifCount(0);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshEventNotifications();
+    const interval = setInterval(refreshEventNotifications, 45000);
+    return () => clearInterval(interval);
+  }, [user, refreshEventNotifications]);
 
   const setPageMeta = React.useCallback(
     (meta: { title: string; items?: BreadcrumbItem[]; actions?: React.ReactNode }) => {
@@ -216,6 +311,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentChapter,
         theme,
         toggleTheme,
+        geminiApiKey,
+        setGeminiApiKey,
+        isAiModalOpen,
+        setIsAiModalOpen,
+        eventNotifications,
+        unreadNotifCount,
+        refreshEventNotifications,
+        markNotificationRead,
+        markAllNotificationsRead,
       }}
     >
       {children}

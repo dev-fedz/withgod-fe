@@ -247,7 +247,7 @@ export default function DevotionsPage() {
 
   const handleSaveDevotion = async () => {
     if (!title.trim()) {
-      alert('Please enter a devotion title.');
+      alert('Please enter a title for your insight.');
       return;
     }
     setIsSaving(true);
@@ -312,8 +312,8 @@ export default function DevotionsPage() {
   return (
     <>
       <PageLayout
-        title="Devotions"
-        items={[{ label: 'Devotions' }]}
+        title="Insights & Devotions"
+        items={[{ label: 'Insights & Devotions' }]}
         actions={
           <button
             type="button"
@@ -341,7 +341,7 @@ export default function DevotionsPage() {
           </div>
 
           <div className="text-xs text-stone-400 font-medium">
-            {devotions.length} {devotions.length === 1 ? 'document' : 'documents'} recorded
+            {devotions.length} {devotions.length === 1 ? 'insight document' : 'insight documents'} recorded
           </div>
         </div>
 
@@ -508,7 +508,7 @@ export default function DevotionsPage() {
               onClick={handleSaveDevotion}
               className="px-6 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-colors disabled:opacity-50"
             >
-              {isSaving ? 'Saving...' : 'Save Devotion'}
+              {isSaving ? 'Saving...' : 'Save Document'}
             </button>
           </div>
         </div>

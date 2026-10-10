@@ -633,7 +633,7 @@ export default function BiblicalFeastsPage() {
   return (
     <>
       <Head>
-        <title>Biblical Feasts (Moedim) | WithGod Bible & Journal</title>
+        <title>Biblical Feasts (Moedim) | Shema Bible & Journal</title>
         <meta
           name="description"
           content="Explore the 7 Biblical Appointed Feasts (Moedim) of Leviticus 23 plus Purim and Hanukkah — prophetic significance, scriptures, and customs in English and Tagalog."

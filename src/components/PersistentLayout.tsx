@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sidebar } from './Sidebar';
 import { Navbar } from './Navbar';
 import { BottomNav } from './BottomNav';
+import { AiAssistantModal } from './AiAssistantModal';
 
 interface PersistentLayoutProps {
   children: React.ReactNode;
@@ -37,6 +38,9 @@ export const PersistentLayout: React.FC<PersistentLayoutProps> = ({ children }) 
 
         {/* Persistent Mobile Bottom Navigation */}
         <BottomNav />
+
+        {/* Global AI Assistant Modal */}
+        <AiAssistantModal />
       </div>
     </div>
   );

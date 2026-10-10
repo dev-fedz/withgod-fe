@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { User, Settings, LogOut, Lock, Mail, CheckCircle2, Shield, Heart } from 'lucide-react';
+import { User, Settings, LogOut, Lock, Mail, CheckCircle2, Shield, Eye, EyeOff, Zap, Loader2, Key } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
 import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, login, logout, refreshUser, currentVersion, setCurrentVersion, theme, toggleTheme } = useApp();
+  const { user, login, logout, refreshUser, currentVersion, setCurrentVersion, theme, toggleTheme, geminiApiKey, setGeminiApiKey } = useApp();
 
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -19,6 +19,62 @@ export default function ProfilePage() {
 
   // Preference state
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Gemini API Key state
+  const [geminiKeyInput, setGeminiKeyInput] = useState(geminiApiKey || '');
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
+  const [isSavingKey, setIsSavingKey] = useState(false);
+  const [keySaved, setKeySaved] = useState(false);
+  const [isTestingKey, setIsTestingKey] = useState(false);
+  const [keyTestStatus, setKeyTestStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
+  const [keyTestError, setKeyTestError] = useState('');
+
+  // Sync if geminiApiKey loaded from storage after mount
+  useEffect(() => {
+    if (geminiApiKey && !geminiKeyInput) {
+      setGeminiKeyInput(geminiApiKey);
+    }
+  }, [geminiApiKey]);
+
+  const handleSaveGeminiKey = () => {
+    setIsSavingKey(true);
+    try {
+      setGeminiApiKey(geminiKeyInput.trim());
+      setKeySaved(true);
+      setTimeout(() => setKeySaved(false), 3000);
+    } finally {
+      setIsSavingKey(false);
+    }
+  };
+
+  const handleTestGeminiKey = async () => {
+    const keyToTest = geminiKeyInput.trim() || geminiApiKey;
+    if (!keyToTest) return;
+    setIsTestingKey(true);
+    setKeyTestStatus('idle');
+    setKeyTestError('');
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${keyToTest}`;
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: 'Respond with OK.' }] }],
+          generationConfig: { maxOutputTokens: 5 },
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error?.message || res.statusText);
+      }
+      setKeyTestStatus('valid');
+    } catch (err: any) {
+      setKeyTestStatus('invalid');
+      setKeyTestError(err.message || 'Verification failed');
+    } finally {
+      setIsTestingKey(false);
+    }
+  };
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,6 +182,98 @@ export default function ProfilePage() {
               )}
             </div>
 
+            {/* Gemini AI API Key Card */}
+            <div className={`p-6 rounded-3xl bg-white dark:bg-stone-900 border shadow-sm space-y-4 transition-colors ${
+              geminiApiKey ? 'border-amber-300 dark:border-amber-800' : 'border-stone-200/80 dark:border-stone-800'
+            }`}>
+              <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                <Key className="w-4 h-4 text-amber-500" />
+                <span>Gemini AI API Key</span>
+                {geminiApiKey && (
+                  <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">CONFIGURED</span>
+                )}
+              </h3>
+              <p className="text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
+                Enter your personal Gemini API key to enable the AI Bible assistant. The key is stored locally in your browser.
+                Get a free key at{' '}
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-amber-600 dark:text-amber-400 underline underline-offset-2">aistudio.google.com</a>.
+              </p>
+
+              {/* Key input */}
+              <div className="relative">
+                <input
+                  id="gemini-api-key-input"
+                  type={showGeminiKey ? 'text' : 'password'}
+                  value={geminiKeyInput}
+                  onChange={(e) => setGeminiKeyInput(e.target.value)}
+                  placeholder="AIza..."
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full pl-3 pr-10 py-2.5 rounded-2xl text-xs border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/60 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowGeminiKey(!showGeminiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
+                  aria-label={showGeminiKey ? 'Hide API key' : 'Show API key'}
+                >
+                  {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {/* Status */}
+              {keyTestStatus === 'valid' && (
+                <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Gemini API key is verified and operational!</span>
+                </div>
+              )}
+              {keyTestStatus === 'invalid' && (
+                <div className="text-xs text-rose-600 dark:text-rose-400 font-medium">
+                  ✕ Invalid key: {keyTestError}
+                </div>
+              )}
+              {keySaved && (
+                <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>API key saved successfully!</span>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  id="test-gemini-key-btn"
+                  type="button"
+                  onClick={handleTestGeminiKey}
+                  disabled={isTestingKey || !geminiKeyInput.trim()}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 disabled:opacity-50 transition-colors"
+                >
+                  {isTestingKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                  {isTestingKey ? 'Testing...' : 'Test Connection'}
+                </button>
+                <button
+                  id="save-gemini-key-btn"
+                  type="button"
+                  onClick={handleSaveGeminiKey}
+                  disabled={isSavingKey || !geminiKeyInput.trim()}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+                >
+                  {isSavingKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                  Save Key
+                </button>
+                {geminiApiKey && (
+                  <button
+                    type="button"
+                    onClick={() => { setGeminiApiKey(''); setGeminiKeyInput(''); setKeyTestStatus('idle'); }}
+                    className="py-2 px-3 rounded-xl border border-rose-200 dark:border-rose-900/50 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Admin Portal Link if staff */}
             {user.is_staff && (
               <div className="p-6 rounded-3xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 shadow-sm space-y-2">
@@ -165,7 +313,7 @@ export default function ProfilePage() {
           <div className="p-6 sm:p-10 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 shadow-xl space-y-6">
             <div className="text-center space-y-1">
               <h2 className="text-2xl font-bold text-stone-900 dark:text-stone-100">
-                {authMode === 'login' ? 'Sign In to WithGod' : 'Create Your Account'}
+                {authMode === 'login' ? 'Sign In to Shema' : 'Create Your Account'}
               </h2>
               <p className="text-xs text-stone-500">
                 Access your personal devotions, highlights, and notes across all your devices.

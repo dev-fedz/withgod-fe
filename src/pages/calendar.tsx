@@ -85,7 +85,7 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedListTab, setSelectedListTab] = useState<'all' | 'upcoming' | 'month' | 'reminders'>('all');
+  const [selectedListTab, setSelectedListTab] = useState<'all' | 'upcoming' | 'past' | 'month' | 'reminders'>('all');
 
   // Event modal state (Add / Edit)
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -144,6 +144,26 @@ export default function CalendarPage() {
       setViewMode('list');
     }
   }, [canManage, viewMode]);
+
+  // Handle URL query parameters (e.g. ?tab=reminders or ?eventId=...)
+  useEffect(() => {
+    if (router.query.tab) {
+      const tab = router.query.tab as string;
+      if (tab === 'reminders' || tab === 'announcements') {
+        setSelectedListTab('reminders');
+        setViewMode('list');
+      } else if (['all', 'upcoming', 'past', 'month'].includes(tab)) {
+        setSelectedListTab(tab as any);
+        setViewMode('list');
+      }
+    }
+    if (router.query.eventId && events.length > 0) {
+      const found = events.find((e) => e.id === router.query.eventId);
+      if (found) {
+        setDetailEvent(found);
+      }
+    }
+  }, [router.query.tab, router.query.eventId, events]);
 
   // Date navigation helpers
   const handlePrev = () => {
@@ -528,10 +548,11 @@ export default function CalendarPage() {
           /* ========================================================= */
           <div className="space-y-6">
             {/* Filter Tabs for List View */}
-            <div className="flex items-center space-x-2 border-b border-stone-200 dark:border-stone-800 pb-3">
+            <div className="flex items-center space-x-2 border-b border-stone-200 dark:border-stone-800 pb-3 overflow-x-auto">
               {[
+                { key: 'upcoming', label: 'Next 30 Days' },
+                { key: 'past', label: 'Past / Done' },
                 { key: 'all', label: 'All Events' },
-                { key: 'upcoming', label: 'Upcoming' },
                 { key: 'month', label: 'This Month' },
                 { key: 'reminders', label: 'Reminders' },
               ].map((tab) => (
@@ -539,7 +560,7 @@ export default function CalendarPage() {
                   key={tab.key}
                   type="button"
                   onClick={() => setSelectedListTab(tab.key as any)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                     selectedListTab === tab.key
                       ? 'bg-amber-500 text-white shadow-sm'
                       : 'text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800'
@@ -556,8 +577,15 @@ export default function CalendarPage() {
                 filteredEvents
                   .filter((e) => {
                     const todayStr = formatDateISO(new Date());
+                    const in30Days = new Date();
+                    in30Days.setDate(in30Days.getDate() + 30);
+                    const in30DaysStr = formatDateISO(in30Days);
+
                     if (selectedListTab === 'upcoming') {
-                      return (e.end_date || e.date) >= todayStr;
+                      return (e.end_date || e.date) >= todayStr && e.date <= in30DaysStr;
+                    }
+                    if (selectedListTab === 'past') {
+                      return (e.end_date || e.date) < todayStr;
                     }
                     if (selectedListTab === 'month') {
                       const curYear = currentDate.getFullYear();

@@ -299,13 +299,28 @@ class ApiClient {
   }
 
   // Events APIs
-  getEvents(params?: { start_date?: string; end_date?: string; year?: number; month?: number; search?: string }) {
+  getEvents(params?: {
+    start_date?: string;
+    end_date?: string;
+    startDate?: string;
+    endDate?: string;
+    year?: number;
+    month?: number;
+    search?: string;
+    event_type?: string;
+    eventType?: string;
+  }) {
+    if (!params) return this.request('/events/');
     const searchParams = new URLSearchParams();
-    if (params?.start_date) searchParams.append('start_date', params.start_date);
-    if (params?.end_date) searchParams.append('end_date', params.end_date);
-    if (params?.year) searchParams.append('year', params.year.toString());
-    if (params?.month) searchParams.append('month', params.month.toString());
-    if (params?.search) searchParams.append('search', params.search);
+    const sDate = params.start_date || params.startDate;
+    const eDate = params.end_date || params.endDate;
+    const eType = params.event_type || params.eventType;
+    if (sDate) searchParams.append('start_date', sDate);
+    if (eDate) searchParams.append('end_date', eDate);
+    if (params.year) searchParams.append('year', params.year.toString());
+    if (params.month) searchParams.append('month', params.month.toString());
+    if (params.search) searchParams.append('search', params.search);
+    if (eType) searchParams.append('event_type', eType);
     const qs = searchParams.toString() ? `?${searchParams.toString()}` : '';
     return this.request(`/events/${qs}`);
   }
@@ -314,8 +329,14 @@ class ApiClient {
     return this.request(`/events/${id}/`);
   }
 
-  getUpcomingEvents() {
-    return this.request('/events/upcoming/');
+  getUpcomingEvents(params?: { eventType?: string; event_type?: string; days?: number }) {
+    if (!params) return this.request('/events/upcoming/');
+    const searchParams = new URLSearchParams();
+    const eType = params.eventType || params.event_type;
+    if (eType) searchParams.append('event_type', eType);
+    if (params.days) searchParams.append('days', params.days.toString());
+    const qs = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return this.request(`/events/upcoming/${qs}`);
   }
 
   getAdminEvents() {
@@ -434,6 +455,54 @@ class ApiClient {
 
   getTorahReadings(portionId: string, versionId: string = 'KJV') {
     return this.request(`/torah/portions/${encodeURIComponent(portionId)}/read/?version=${encodeURIComponent(versionId)}`);
+  }
+
+  // Chat APIs
+  getChatUsers(search?: string) {
+    const qs = search ? `?search=${encodeURIComponent(search)}` : '';
+    return this.request(`/chat/users/${qs}`);
+  }
+
+  getChatConversations() {
+    return this.request('/chat/conversations/');
+  }
+
+  startDirectChat(targetUserId: string) {
+    return this.request('/chat/conversations/direct/', {
+      method: 'POST',
+      body: JSON.stringify({ target_user_id: targetUserId }),
+    });
+  }
+
+  createGroupChat(name: string, participantIds: string[], description?: string) {
+    return this.request('/chat/conversations/group/', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        title: name,
+        participant_ids: participantIds,
+        description: description || '',
+      }),
+    });
+  }
+
+  getChatMessages(conversationId: string, since?: string, limit: number = 50) {
+    const params = new URLSearchParams();
+    if (since) params.append('since', since);
+    if (limit) params.append('limit', String(limit));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.request(`/chat/conversations/${conversationId}/messages/${qs}`);
+  }
+
+  sendChatMessage(conversationId: string, content: string, messageType: string = 'text', mediaUrl?: string) {
+    return this.request(`/chat/conversations/${conversationId}/messages/`, {
+      method: 'POST',
+      body: JSON.stringify({
+        content,
+        message_type: messageType,
+        media_url: mediaUrl || '',
+      }),
+    });
   }
 }
 

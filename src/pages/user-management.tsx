@@ -671,7 +671,7 @@ export default function UserManagementPage() {
               <div>
                 <p className="font-bold">System Permissions & Modules Architecture</p>
                 <p className="text-[11px] text-amber-800/80 dark:text-amber-400/80 mt-0.5">
-                  Modules represent major subsystems in WithGod. You can assign granular permissions to any custom or system role.
+                  Modules represent major subsystems in Shema. You can assign granular permissions to any custom or system role.
                 </p>
               </div>
             </div>

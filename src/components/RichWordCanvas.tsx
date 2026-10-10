@@ -245,7 +245,7 @@ export const RichWordCanvas: React.FC<RichWordCanvasProps> = ({
         {/* Document Header & Margins / Selection Bar */}
         <div className="flex flex-wrap items-center justify-between px-6 py-2.5 border-b border-black/5 dark:border-white/10 select-none text-[11px] text-stone-500 font-serif bg-stone-50/40 dark:bg-stone-900/30 gap-2">
           <div className="flex items-center gap-3">
-            <span className="font-semibold text-stone-600 dark:text-stone-300">WithGod Word Canvas • 1.0" Margins</span>
+            <span className="font-semibold text-stone-600 dark:text-stone-300">Shema Word Canvas • 1.0" Margins</span>
             {attachedImages.length > 0 && (
               <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200/60 dark:border-amber-800/40">
                 {attachedImages.length} picture{attachedImages.length > 1 ? 's' : ''} attached (click to select & move)
