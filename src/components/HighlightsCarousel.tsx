@@ -33,10 +33,17 @@ const VideoHighlightRow: React.FC<VideoHighlightRowProps> = ({ highlight }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isMuted, setIsMuted] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
-  // Ensure absolute backend stream proxy URL that handles 200MB+ videos with Range headers & confirm=t
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api';
-  const cleanApiUrl = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl;
+  // Dynamic host resolution so mobile devices on LAN can stream from backend host
+  const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api';
+  let cleanApiUrl = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
+  if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost') {
+    cleanApiUrl = cleanApiUrl
+      .replace('localhost', window.location.hostname)
+      .replace('127.0.0.1', window.location.hostname);
+  }
+
   const backendStreamUrl =
     highlight.stream_url && highlight.stream_url.startsWith('http')
       ? highlight.stream_url
@@ -52,6 +59,7 @@ const VideoHighlightRow: React.FC<VideoHighlightRowProps> = ({ highlight }) => {
     video.setAttribute('muted', '');
     video.setAttribute('playsinline', '');
     video.setAttribute('webkit-playsinline', '');
+    video.setAttribute('x5-playsinline', '');
 
     const tryPlay = () => {
       if (!video) return;
@@ -61,6 +69,7 @@ const VideoHighlightRow: React.FC<VideoHighlightRowProps> = ({ highlight }) => {
         playPromise
           .then(() => {
             setIsPlaying(true);
+            setHasError(false);
           })
           .catch(() => {
             // Browser mobile autoplay restriction, keep paused state for tap overlay
@@ -125,12 +134,14 @@ const VideoHighlightRow: React.FC<VideoHighlightRowProps> = ({ highlight }) => {
       className="relative overflow-hidden rounded-3xl bg-stone-950 border border-stone-200/80 dark:border-stone-800 shadow-xl group select-none"
     >
       {/* Top Header Bar */}
-      <div className="px-5 py-3.5 bg-stone-900/90 border-b border-stone-800 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500 text-stone-950 shadow-sm shrink-0">
-            <Film className="w-3.5 h-3.5" /> Featured Video
+      <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-stone-900/90 border-b border-stone-800 flex items-center justify-between gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+          <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold bg-amber-500 text-stone-950 shadow-sm shrink-0">
+            <Film className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Featured Video</span>
+            <span className="sm:hidden">Video</span>
           </span>
-          <h3 className="text-sm sm:text-base font-bold text-white truncate">
+          <h3 className="text-xs sm:text-sm md:text-base font-bold text-white truncate">
             {highlight.title}
           </h3>
         </div>
@@ -170,35 +181,64 @@ const VideoHighlightRow: React.FC<VideoHighlightRowProps> = ({ highlight }) => {
 
       {/* Autoplay Video Canvas */}
       <div className="relative w-full h-[280px] sm:h-[400px] md:h-[480px] bg-black flex items-center justify-center overflow-hidden">
-        <video
-          ref={videoRef}
-          src={backendStreamUrl}
-          autoPlay
-          muted
-          loop
-          playsInline
-          controls
-          preload="auto"
-          onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
-          className="w-full h-full object-contain cursor-pointer"
-          onClick={togglePlay}
-        />
-
-        {/* Mobile Tap-to-Play Overlay if browser blocks autoplay before user gesture */}
-        {!isPlaying && (
-          <div
-            onClick={togglePlay}
-            className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center cursor-pointer z-20 group-hover:bg-black/30 transition-colors"
-          >
-            <button
-              type="button"
-              aria-label="Play video"
-              className="w-16 h-16 rounded-full bg-amber-500 hover:bg-amber-400 text-stone-950 flex items-center justify-center shadow-2xl transition-transform transform hover:scale-110 active:scale-95 ring-4 ring-amber-500/30"
+        {hasError ? (
+          <div className="flex flex-col items-center justify-center p-6 text-center text-stone-300">
+            <AlertCircle className="w-10 h-10 text-amber-500 mb-2" />
+            <p className="text-sm font-semibold mb-1">Direct stream unavailable on this network</p>
+            <p className="text-xs text-stone-400 mb-4 max-w-sm">
+              You can still watch this video highlight directly on Google Drive.
+            </p>
+            <a
+              href={highlight.drive_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 text-stone-950 hover:bg-amber-400 transition-colors shadow-lg"
             >
-              <Play className="w-7 h-7 fill-current ml-1" />
-            </button>
+              <ExternalLink className="w-4 h-4" /> Open in Google Drive
+            </a>
           </div>
+        ) : (
+          <>
+            <video
+              ref={videoRef}
+              src={backendStreamUrl}
+              autoPlay
+              muted
+              loop
+              playsInline
+              controls
+              preload="metadata"
+              poster={highlight.thumbnail_url || highlight.preview_url || undefined}
+              onError={() => setHasError(true)}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              className="w-full h-full object-contain cursor-pointer"
+              onClick={togglePlay}
+            />
+
+            {/* Mobile Tap-to-Play Overlay if browser blocks autoplay before user gesture */}
+            {!isPlaying && (
+              <div
+                onClick={togglePlay}
+                className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex flex-col items-center justify-center cursor-pointer z-20 group-hover:bg-black/30 transition-colors"
+              >
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePlay();
+                  }}
+                  aria-label="Play video"
+                  className="w-16 h-16 rounded-full bg-amber-500 hover:bg-amber-400 text-stone-950 flex items-center justify-center shadow-2xl transition-transform transform hover:scale-110 active:scale-95 ring-4 ring-amber-500/30"
+                >
+                  <Play className="w-7 h-7 fill-current ml-1" />
+                </button>
+                <span className="mt-3 px-3 py-1 rounded-full text-xs font-semibold bg-stone-900/80 text-stone-200 border border-stone-700/80 shadow-md">
+                  Tap to Play
+                </span>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -356,20 +396,20 @@ const ImageHighlightRow: React.FC<ImageHighlightRowProps> = ({ highlight, settin
 
     const isCenter = offset === 0;
     const absOffset = Math.abs(offset);
-    const isVisible = absOffset <= 3;
+    // On mobile, limit to immediate adjacent cards to keep center hero card unobscured
+    const isVisible = absOffset <= (isMobile ? 2 : 3);
     const direction = offset < 0 ? -1 : 1;
 
-    // Spacing calibrated for desktop vs mobile
-    const baseSpacing = isMobile ? 80 : 160;
-    const stepSpacing = isMobile ? 50 : 100;
+    // Spacing calibrated for desktop vs mobile (110px on mobile reveals center photo cleanly)
+    const baseSpacing = isMobile ? 110 : 160;
+    const stepSpacing = isMobile ? 60 : 100;
     const xTranslate = isCenter ? 0 : direction * (baseSpacing + (absOffset - 1) * stepSpacing);
 
-    // Left cards rotate positive (+36deg), right cards rotate negative (-36deg)
-    // facing gracefully inward towards center stage
-    const rotateY = isCenter ? 0 : direction * -38;
-    const scale = isCenter ? 1.05 : Math.max(0.68, 1 - absOffset * (isMobile ? 0.16 : 0.13));
+    // Left cards rotate positive (+42deg on mobile), right cards rotate negative (-42deg on mobile)
+    const rotateY = isCenter ? 0 : direction * (isMobile ? -42 : -38);
+    const scale = isCenter ? (isMobile ? 1.02 : 1.05) : Math.max(0.68, 1 - absOffset * (isMobile ? 0.20 : 0.13));
     const zIndex = isCenter ? 40 : Math.max(1, 30 - absOffset * 5);
-    const opacity = isVisible ? (isCenter ? 1 : Math.max(0.25, 0.9 - absOffset * 0.25)) : 0;
+    const opacity = isVisible ? (isCenter ? 1 : Math.max(0.2, (isMobile ? 0.75 : 0.9) - absOffset * (isMobile ? 0.35 : 0.25))) : 0;
     const brightness = isCenter ? 1 : Math.max(0.4, 0.75 - absOffset * 0.15);
 
     return {
@@ -392,30 +432,34 @@ const ImageHighlightRow: React.FC<ImageHighlightRowProps> = ({ highlight, settin
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* 1. Header Bar with Category Badge and Controls */}
-      <div className="px-5 py-4 bg-stone-900/90 backdrop-blur-md border-b border-stone-800/80 flex items-center justify-between gap-3 relative z-30">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-amber-400 text-stone-950 shadow-sm shrink-0">
+      <div className="px-3.5 sm:px-5 py-3 sm:py-4 bg-stone-900/90 backdrop-blur-md border-b border-stone-800/80 flex items-center justify-between gap-2 sm:gap-3 relative z-30">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+          <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-amber-400 text-stone-950 shadow-sm shrink-0">
             {highlight.is_folder ? (
               <>
-                <FolderOpen className="w-3.5 h-3.5" /> 3D Photo Directory
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">3D Photo Directory</span>
+                <span className="sm:hidden">Gallery</span>
               </>
             ) : (
               <>
-                <Images className="w-3.5 h-3.5" /> 3D Coverflow
+                <Images className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">3D Coverflow</span>
+                <span className="sm:hidden">Gallery</span>
               </>
             )}
           </span>
-          <h3 className="text-sm sm:text-base font-bold text-white truncate">
+          <h3 className="text-xs sm:text-sm md:text-base font-bold text-white truncate">
             {highlight.title}
           </h3>
           {slides.length > 1 && (
-            <span className="hidden sm:inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold bg-stone-800/80 text-stone-300 border border-stone-700/60">
+            <span className="hidden md:inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold bg-stone-800/80 text-stone-300 border border-stone-700/60 shrink-0">
               {slides.length} Photos
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Auto-rotate toggle */}
           {slides.length > 1 && (
             <button
@@ -445,7 +489,7 @@ const ImageHighlightRow: React.FC<ImageHighlightRowProps> = ({ highlight, settin
             href={highlight.drive_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-stone-800/90 hover:bg-stone-700 text-stone-300 hover:text-white transition-colors border border-stone-700/60"
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-stone-800/90 hover:bg-stone-700 text-stone-300 hover:text-white transition-colors border border-stone-700/60"
             title="Open in Google Drive"
           >
             <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
@@ -456,7 +500,7 @@ const ImageHighlightRow: React.FC<ImageHighlightRowProps> = ({ highlight, settin
 
       {/* 2. Story-Style Segmented Progress Bar across top */}
       {slides.length > 1 && (
-        <div className="px-5 pt-3 pb-1 flex items-center gap-1.5 w-full bg-[#0c0d12]">
+        <div className="px-4 sm:px-5 pt-3 pb-1 flex items-center gap-1.5 w-full bg-[#0c0d12]">
           {slides.map((_, idx) => (
             <button
               key={`progress-${idx}`}
@@ -481,7 +525,7 @@ const ImageHighlightRow: React.FC<ImageHighlightRowProps> = ({ highlight, settin
 
       {/* 3. Main 3D Coverflow Stage */}
       <div
-        className="relative w-full h-[400px] sm:h-[460px] md:h-[500px] flex items-center justify-center overflow-hidden"
+        className="relative w-full h-[360px] sm:h-[460px] md:h-[500px] flex items-center justify-center overflow-hidden"
         style={{
           perspective: '1200px',
           perspectiveOrigin: '50% 50%',
@@ -546,9 +590,9 @@ const ImageHighlightRow: React.FC<ImageHighlightRowProps> = ({ highlight, settin
                   transformStyle: 'preserve-3d',
                   transformOrigin: 'center center',
                   WebkitBoxReflect:
-                    'below 4px linear-gradient(to bottom, transparent 65%, rgba(0,0,0,0.25) 100%)',
+                    'below 4px linear-gradient(to bottom, transparent 70%, rgba(0,0,0,0.2) 100%)',
                 }}
-                className={`absolute w-[230px] sm:w-[270px] md:w-[300px] h-[310px] sm:h-[370px] md:h-[410px] rounded-2xl overflow-hidden cursor-pointer select-none border transition-shadow duration-300 ${
+                className={`absolute w-[215px] sm:w-[270px] md:w-[300px] h-[290px] sm:h-[370px] md:h-[410px] rounded-2xl overflow-hidden cursor-pointer select-none border transition-shadow duration-300 ${
                   transform.isCenter
                     ? 'border-amber-400/50 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95),0_0_35px_rgba(245,158,11,0.25)] ring-1 ring-amber-400/30'
                     : 'border-white/10 hover:border-white/25 shadow-2xl shadow-black/80'
@@ -558,14 +602,14 @@ const ImageHighlightRow: React.FC<ImageHighlightRowProps> = ({ highlight, settin
                 {imgError[slide.id] ? (
                   <div className="w-full h-full bg-stone-900 flex flex-col items-center justify-center p-6 text-center text-stone-400">
                     <AlertCircle className="w-8 h-8 text-amber-400 mb-2" />
-                    <span className="text-xs font-semibold text-stone-300">{slide.name}</span>
+                    <span className="text-xs font-semibold text-stone-300">{highlight.title}</span>
                     <span className="text-[10px] text-stone-500 mt-1">Image preview unavailable</span>
                   </div>
                 ) : (
                   <div className="relative w-full h-full bg-black">
                     <img
                       src={imgFallback[slide.id] ? slide.fallbackUrl : slide.url}
-                      alt={slide.name}
+                      alt={`${highlight.title} - photo ${idx + 1}`}
                       onError={() => {
                         if (!imgFallback[slide.id]) {
                           setImgFallback((prev) => ({ ...prev, [slide.id]: true }));
@@ -576,24 +620,14 @@ const ImageHighlightRow: React.FC<ImageHighlightRowProps> = ({ highlight, settin
                       className="w-full h-full object-cover transition-transform duration-700 hover:scale-105 pointer-events-none"
                     />
 
-                    {/* Gradient shading for text readability */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/20 pointer-events-none" />
+                    {/* Gradient shading for photo depth */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
 
-                    {/* Card Top Category Pill (as in reference image) */}
+                    {/* Card Top Category Pill */}
                     <div className="absolute top-3.5 left-3.5 z-20 pointer-events-none">
                       <span className="px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-widest bg-black/60 backdrop-blur-md text-amber-300 border border-amber-400/20 shadow-md">
                         {slide.tag}
                       </span>
-                    </div>
-
-                    {/* Card Bottom Info Overlay */}
-                    <div className="absolute bottom-0 inset-x-0 p-4 z-20 pointer-events-none">
-                      <h4 className="text-sm sm:text-base font-black text-white tracking-tight drop-shadow-md truncate">
-                        {slide.name}
-                      </h4>
-                      <p className="text-[11px] text-stone-300 font-serif line-clamp-1 mt-0.5 opacity-90 drop-shadow-sm">
-                        {highlight.description || 'Community highlight collection'}
-                      </p>
                     </div>
 
                     {/* Center Card Zoom Hint */}
@@ -619,43 +653,43 @@ const ImageHighlightRow: React.FC<ImageHighlightRowProps> = ({ highlight, settin
               type="button"
               onClick={prevSlide}
               aria-label="Previous 3D slide"
-              className="absolute left-4 top-1/2 -translate-y-1/2 z-40 w-11 h-11 rounded-full bg-stone-900/80 hover:bg-stone-800 text-stone-200 hover:text-white border border-stone-700/80 hover:border-amber-400/50 backdrop-blur-md flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-2xl"
+              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-40 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-stone-900/80 hover:bg-stone-800 text-stone-200 hover:text-white border border-stone-700/80 hover:border-amber-400/50 backdrop-blur-md flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-2xl"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
             <button
               type="button"
               onClick={nextSlide}
               aria-label="Next 3D slide"
-              className="absolute right-4 top-1/2 -translate-y-1/2 z-40 w-11 h-11 rounded-full bg-stone-900/80 hover:bg-stone-800 text-stone-200 hover:text-white border border-stone-700/80 hover:border-amber-400/50 backdrop-blur-md flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-2xl"
+              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-40 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-stone-900/80 hover:bg-stone-800 text-stone-200 hover:text-white border border-stone-700/80 hover:border-amber-400/50 backdrop-blur-md flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-2xl"
             >
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </>
         )}
       </div>
 
-      {/* 4. Active Slide Details & Fun Interactive Elements (Matching Reference Design) */}
-      <div className="px-6 py-5 bg-[#0c0d12] border-t border-stone-800/80 flex flex-col items-center text-center relative z-20">
-        <span className="text-[11px] font-black tracking-widest uppercase text-amber-400 flex items-center gap-1.5">
+      {/* 4. Active Slide Details & Fun Interactive Elements */}
+      <div className="px-4 sm:px-6 py-4 sm:py-5 bg-[#0c0d12] border-t border-stone-800/80 flex flex-col items-center text-center relative z-20">
+        <span className="text-[10px] sm:text-[11px] font-black tracking-widest uppercase text-amber-400 flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-amber-400" />
           {slides.length > 1
             ? `${activeSlide.tag} · PHOTO ${currentSlideIndex + 1} OF ${slides.length}`
             : 'FEATURED PHOTO'}
         </span>
 
-        <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight mt-1.5 max-w-xl">
-          {activeSlide.name}
+        <h3 className="text-base sm:text-xl md:text-2xl font-black text-white tracking-tight mt-1 max-w-xl">
+          {highlight.title}
         </h3>
 
         {highlight.description && (
-          <p className="text-xs sm:text-sm text-stone-300 font-serif max-w-xl mt-1.5 line-clamp-2 leading-relaxed">
+          <p className="text-xs sm:text-sm text-stone-300 font-serif max-w-xl mt-1 line-clamp-2 leading-relaxed">
             {highlight.description}
           </p>
         )}
 
         {/* Fun Interactive Reactions Bar */}
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-3.5 sm:mt-4 flex items-center gap-3">
           {/* Like / Heart reaction with floating particles */}
           <div className="relative">
             <button
@@ -712,8 +746,8 @@ const ImageHighlightRow: React.FC<ImageHighlightRowProps> = ({ highlight, settin
               key={`thumb-${s.id}-${idx}`}
               type="button"
               onClick={() => setCurrentSlideIndex(idx)}
-              aria-label={`Jump to ${s.name}`}
-              className={`relative shrink-0 w-12 h-12 rounded-xl overflow-hidden border transition-all duration-300 ${
+              aria-label={`Jump to photo ${idx + 1}`}
+              className={`relative shrink-0 w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden border transition-all duration-300 ${
                 idx === currentSlideIndex
                   ? 'border-amber-400 ring-2 ring-amber-400/50 scale-105 shadow-md shadow-amber-400/20'
                   : 'border-stone-800 opacity-50 hover:opacity-100 hover:border-stone-600'
@@ -721,7 +755,7 @@ const ImageHighlightRow: React.FC<ImageHighlightRowProps> = ({ highlight, settin
             >
               <img
                 src={imgFallback[s.id] ? s.fallbackUrl : s.url}
-                alt={s.name}
+                alt={`Thumbnail ${idx + 1}`}
                 className="w-full h-full object-cover"
               />
             </button>
@@ -793,7 +827,7 @@ const ImageHighlightRow: React.FC<ImageHighlightRowProps> = ({ highlight, settin
               <motion.img
                 key={activeSlide.id}
                 src={imgFallback[activeSlide.id] ? activeSlide.fallbackUrl : activeSlide.url}
-                alt={activeSlide.name}
+                alt={`${highlight.title} - photo ${currentSlideIndex + 1}`}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
@@ -818,7 +852,14 @@ const ImageHighlightRow: React.FC<ImageHighlightRowProps> = ({ highlight, settin
               className="text-center py-2 z-10"
               onClick={(e) => e.stopPropagation()}
             >
-              <h4 className="text-base sm:text-lg font-black text-white">{activeSlide.name}</h4>
+              <h4 className="text-base sm:text-lg font-black text-white">
+                {highlight.title}
+                {slides.length > 1 && (
+                  <span className="text-stone-400 text-sm font-normal ml-2">
+                    ({currentSlideIndex + 1} of {slides.length})
+                  </span>
+                )}
+              </h4>
               {highlight.description && (
                 <p className="text-xs sm:text-sm text-stone-400 max-w-lg mx-auto font-serif mt-0.5">
                   {highlight.description}
