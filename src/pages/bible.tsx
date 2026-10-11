@@ -33,7 +33,7 @@ import PageLayout from '../components/PageLayout';
 import { Modal } from '../components/Modal';
 import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
-import { getDownloadedBibleVersions } from '../utils/bibleUtils';
+import { getDownloadedBibleVersions, CANONICAL_BIBLE_BOOKS } from '../utils/bibleUtils';
 
 const HIGHLIGHT_COLORS = [
   { id: 'yellow', label: 'Yellow', bg: 'bg-yellow-200/70 dark:bg-yellow-500/30 text-yellow-900 dark:text-yellow-100', dot: '#FACC15' },
@@ -198,7 +198,7 @@ export default function BibleReader() {
   } = useApp();
 
   const [versions, setVersions] = useState<any[]>([]);
-  const [books, setBooks] = useState<any[]>([]);
+  const [books, setBooks] = useState<any[]>(CANONICAL_BIBLE_BOOKS);
   const [chapterData, setChapterData] = useState<any>(null);
   const [highlights, setHighlights] = useState<any[]>([]);
   const [userInsights, setUserInsights] = useState<any[]>([]);
@@ -431,8 +431,27 @@ export default function BibleReader() {
         if (avail.status === 'fulfilled' && Array.isArray(avail.value)) {
           setAvailableVersions(avail.value);
         }
-        const bks = await api.getBibleBooks(currentVersion);
-        setBooks(bks);
+        try {
+          const bks = await api.getBibleBooks(currentVersion);
+          if (Array.isArray(bks) && bks.length >= 66) {
+            setBooks(bks);
+          } else if (Array.isArray(bks) && bks.length > 0) {
+            const merged = CANONICAL_BIBLE_BOOKS.map((canon) => {
+              const match = bks.find(
+                (b: any) =>
+                  b.book_number === canon.book_number ||
+                  b.name?.toLowerCase() === canon.name.toLowerCase()
+              );
+              return match ? { ...canon, ...match } : canon;
+            });
+            setBooks(merged);
+          } else {
+            setBooks(CANONICAL_BIBLE_BOOKS);
+          }
+        } catch (bksErr) {
+          console.warn('Failed to fetch version books, fallback to canonical books', bksErr);
+          setBooks(CANONICAL_BIBLE_BOOKS);
+        }
       } catch (err) {
         console.error(err);
       }
