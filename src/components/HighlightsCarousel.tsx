@@ -29,107 +29,14 @@ interface VideoHighlightRowProps {
 }
 
 const VideoHighlightRow: React.FC<VideoHighlightRowProps> = ({ highlight }) => {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [isMuted, setIsMuted] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [hasError, setHasError] = useState(false);
-
-  // Dynamic host resolution so mobile devices on LAN can stream from backend host
-  const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api';
-  let cleanApiUrl = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
-  if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost') {
-    cleanApiUrl = cleanApiUrl
-      .replace('localhost', window.location.hostname)
-      .replace('127.0.0.1', window.location.hostname);
-  }
-
-  const backendStreamUrl =
-    highlight.stream_url && highlight.stream_url.startsWith('http')
-      ? highlight.stream_url
-      : `${cleanApiUrl}/highlights/stream/${highlight.drive_file_id}/`;
-
-  // Autoplay handler with mobile policy fallbacks
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    video.defaultMuted = true;
-    video.muted = true;
-    video.setAttribute('muted', '');
-    video.setAttribute('playsinline', '');
-    video.setAttribute('webkit-playsinline', '');
-    video.setAttribute('x5-playsinline', '');
-
-    const tryPlay = () => {
-      if (!video) return;
-      video.muted = true;
-      const playPromise = video.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            setIsPlaying(true);
-            setHasError(false);
-          })
-          .catch(() => {
-            // Browser mobile autoplay restriction, keep paused state for tap overlay
-            setIsPlaying(false);
-          });
-      }
-    };
-
-    tryPlay();
-    video.addEventListener('loadeddata', tryPlay);
-    video.addEventListener('canplay', tryPlay);
-
-    // IntersectionObserver: trigger autoplay when scrolled into view on mobile
-    let observer: IntersectionObserver | null = null;
-    if (containerRef.current && typeof IntersectionObserver !== 'undefined') {
-      observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting && video.paused) {
-              tryPlay();
-            }
-          });
-        },
-        { threshold: 0.3 }
-      );
-      observer.observe(containerRef.current);
-    }
-
-    return () => {
-      video.removeEventListener('loadeddata', tryPlay);
-      video.removeEventListener('canplay', tryPlay);
-      if (observer) observer.disconnect();
-    };
-  }, [backendStreamUrl]);
-
-  const toggleMute = () => {
-    if (videoRef.current) {
-      const next = !videoRef.current.muted;
-      videoRef.current.muted = next;
-      setIsMuted(next);
-      if (videoRef.current.paused) {
-        videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
-      }
-    }
-  };
-
-  const togglePlay = () => {
-    if (videoRef.current) {
-      if (videoRef.current.paused) {
-        videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
-      } else {
-        videoRef.current.pause();
-        setIsPlaying(false);
-      }
-    }
-  };
+  const embedUrl =
+    highlight.embed_url ||
+    (highlight.drive_file_id
+      ? `https://drive.google.com/file/d/${highlight.drive_file_id}/preview`
+      : '');
 
   return (
     <section
-      ref={containerRef}
       aria-label={`Video Highlight: ${highlight.title}`}
       className="relative overflow-hidden rounded-3xl bg-stone-950 border border-stone-200/80 dark:border-stone-800 shadow-xl group select-none"
     >
@@ -145,100 +52,23 @@ const VideoHighlightRow: React.FC<VideoHighlightRowProps> = ({ highlight }) => {
             {highlight.title}
           </h3>
         </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={toggleMute}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-200 transition-colors"
-            title={isMuted ? 'Click to Unmute' : 'Mute Video'}
-          >
-            {isMuted ? (
-              <>
-                <VolumeX className="w-3.5 h-3.5 text-amber-400" />
-                <span>Unmute</span>
-              </>
-            ) : (
-              <>
-                <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Mute</span>
-              </>
-            )}
-          </button>
-
-          <a
-            href={highlight.drive_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white transition-colors shrink-0"
-            title="Open in Google Drive"
-          >
-            <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Drive</span>
-          </a>
-        </div>
       </div>
 
-      {/* Autoplay Video Canvas */}
+      {/* Embedded Video Canvas - Same method as Edit Highlight modal */}
       <div className="relative w-full h-[280px] sm:h-[400px] md:h-[480px] bg-black flex items-center justify-center overflow-hidden">
-        {hasError ? (
-          <div className="flex flex-col items-center justify-center p-6 text-center text-stone-300">
-            <AlertCircle className="w-10 h-10 text-amber-500 mb-2" />
-            <p className="text-sm font-semibold mb-1">Direct stream unavailable on this network</p>
-            <p className="text-xs text-stone-400 mb-4 max-w-sm">
-              You can still watch this video highlight directly on Google Drive.
-            </p>
-            <a
-              href={highlight.drive_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 text-stone-950 hover:bg-amber-400 transition-colors shadow-lg"
-            >
-              <ExternalLink className="w-4 h-4" /> Open in Google Drive
-            </a>
-          </div>
+        {embedUrl ? (
+          <iframe
+            src={embedUrl}
+            title={highlight.title}
+            className="w-full h-full border-0"
+            allow="autoplay; fullscreen"
+            allowFullScreen
+          />
         ) : (
-          <>
-            <video
-              ref={videoRef}
-              src={backendStreamUrl}
-              autoPlay
-              muted
-              loop
-              playsInline
-              controls
-              preload="metadata"
-              poster={highlight.thumbnail_url || highlight.preview_url || undefined}
-              onError={() => setHasError(true)}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              className="w-full h-full object-contain cursor-pointer"
-              onClick={togglePlay}
-            />
-
-            {/* Mobile Tap-to-Play Overlay if browser blocks autoplay before user gesture */}
-            {!isPlaying && (
-              <div
-                onClick={togglePlay}
-                className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex flex-col items-center justify-center cursor-pointer z-20 group-hover:bg-black/30 transition-colors"
-              >
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    togglePlay();
-                  }}
-                  aria-label="Play video"
-                  className="w-16 h-16 rounded-full bg-amber-500 hover:bg-amber-400 text-stone-950 flex items-center justify-center shadow-2xl transition-transform transform hover:scale-110 active:scale-95 ring-4 ring-amber-500/30"
-                >
-                  <Play className="w-7 h-7 fill-current ml-1" />
-                </button>
-                <span className="mt-3 px-3 py-1 rounded-full text-xs font-semibold bg-stone-900/80 text-stone-200 border border-stone-700/80 shadow-md">
-                  Tap to Play
-                </span>
-              </div>
-            )}
-          </>
+          <div className="flex flex-col items-center justify-center p-6 text-center text-stone-400">
+            <Film className="w-10 h-10 mb-2 opacity-50" />
+            <p className="text-xs">No video URL available</p>
+          </div>
         )}
       </div>
 
@@ -253,7 +83,6 @@ const VideoHighlightRow: React.FC<VideoHighlightRowProps> = ({ highlight }) => {
     </section>
   );
 };
-
 // ============================================================================
 // 2. 3D COVERFLOW IMAGE CAROUSEL COMPONENT
 // Interactive dynamic rotations, depth offsets, and perspective alignment
