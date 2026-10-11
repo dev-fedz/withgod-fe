@@ -16,6 +16,7 @@ import {
   Settings,
   ChevronRight,
   X,
+  Images,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AiAnimatedEye } from './AiAnimatedEye';
@@ -85,6 +86,16 @@ const OVERFLOW_ITEMS: OverflowMenuItem[] = [
     icon: Languages,
     accentColor: '#0284C7',
     requireAuth: false,
+  },
+  {
+    name: 'Highlights',
+    label: 'Highlights Management',
+    subtitle: 'Featured media & Home carousel slideshow',
+    href: '/highlights',
+    icon: Images,
+    accentColor: '#F59E0B',
+    requireAuth: true,
+    staffOnly: true,
   },
   {
     name: 'UserManagement',

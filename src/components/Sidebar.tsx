@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { BookOpen, Home, Edit3, Compass, Bookmark, Settings, Shield, Languages, Scroll, Calendar, Users, Flame, MessageCircle, Sparkles } from 'lucide-react';
+import { BookOpen, Home, Edit3, Compass, Bookmark, Settings, Shield, Languages, Scroll, Calendar, Users, Flame, MessageCircle, Sparkles, Images } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AiAnimatedEye } from './AiAnimatedEye';
 
@@ -31,6 +31,16 @@ export const Sidebar: React.FC = () => {
         { label: 'Learn Hebrew', href: '/hebrew', icon: Languages },
         { label: 'Profile', href: '/profile', icon: Settings },
       ];
+
+  if (
+    user?.is_staff ||
+    user?.is_superuser ||
+    user?.can_manage_highlights ||
+    user?.permissions_list?.includes('can_view_highlights_mgmt') ||
+    user?.permissions_list?.includes('can_create_highlight')
+  ) {
+    navItems.push({ label: 'Highlights', href: '/highlights', icon: Images });
+  }
 
   if (user?.is_staff || user?.can_manage_users) {
     navItems.push({ label: 'User Roles', href: '/user-management', icon: Users });

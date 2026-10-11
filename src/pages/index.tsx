@@ -18,6 +18,7 @@ import {
   Sun,
 } from 'lucide-react';
 import PageLayout from '../components/PageLayout';
+import { HighlightsCarousel } from '../components/HighlightsCarousel';
 import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 import {
@@ -222,6 +223,9 @@ export default function Home() {
           {/* Subtle background glow */}
           <div className="absolute -right-16 -top-16 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
         </section>
+
+        {/* Highlights Carousel (Slideshow) */}
+        <HighlightsCarousel />
 
         {/* Grid: Verse of the Day & Continue Reading */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

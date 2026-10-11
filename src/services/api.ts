@@ -553,6 +553,121 @@ class ApiClient {
       body: JSON.stringify({ is_typing: isTyping }),
     }).catch(() => null);
   }
+
+  // ==========================================
+  // Media Highlights Module APIs
+  // ==========================================
+
+  getHomeHighlights() {
+    return this.request('/highlights/home/');
+  }
+
+  getMediaHighlights(params?: {
+    search?: string;
+    status?: string;
+    media_type?: string;
+    date_from?: string;
+    date_to?: string;
+  }) {
+    const searchParams = new URLSearchParams();
+    if (params?.search) searchParams.append('search', params.search);
+    if (params?.status && params.status !== 'all') searchParams.append('status', params.status);
+    if (params?.media_type && params.media_type !== 'all') searchParams.append('media_type', params.media_type);
+    if (params?.date_from) searchParams.append('date_from', params.date_from);
+    if (params?.date_to) searchParams.append('date_to', params.date_to);
+
+    const qs = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return this.request(`/highlights/${qs}`);
+  }
+
+  getMediaHighlight(id: string) {
+    return this.request(`/highlights/${id}/`);
+  }
+
+  createMediaHighlight(data: {
+    title: string;
+    drive_url: string;
+    media_type?: 'image' | 'video';
+    description?: string;
+    status?: 'draft' | 'published' | 'archived';
+    display_start_date?: string | null;
+    expiration_date?: string | null;
+    display_order?: number;
+    is_featured?: boolean;
+  }) {
+    return this.request('/highlights/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  updateMediaHighlight(id: string, data: {
+    title?: string;
+    drive_url?: string;
+    media_type?: 'image' | 'video';
+    description?: string;
+    status?: 'draft' | 'published' | 'archived';
+    display_start_date?: string | null;
+    expiration_date?: string | null;
+    clear_expiration_date?: boolean;
+    display_order?: number;
+    is_featured?: boolean;
+  }) {
+    return this.request(`/highlights/${id}/`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  publishMediaHighlight(id: string, publish?: boolean) {
+    return this.request(`/highlights/${id}/publish/`, {
+      method: 'POST',
+      body: JSON.stringify(publish !== undefined ? { publish } : {}),
+    });
+  }
+
+  archiveMediaHighlight(id: string) {
+    return this.request(`/highlights/${id}/archive/`, {
+      method: 'POST',
+    });
+  }
+
+  deleteMediaHighlight(id: string) {
+    return this.request(`/highlights/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  reorderMediaHighlights(orders: Array<{ id: string; display_order: number }>) {
+    return this.request('/highlights/reorder/', {
+      method: 'POST',
+      body: JSON.stringify({ orders }),
+    });
+  }
+
+  getHighlightSettings() {
+    return this.request('/highlights/settings/');
+  }
+
+  updateHighlightSettings(settings: {
+    default_duration_days?: number;
+    carousel_interval?: number;
+    auto_rotate?: boolean;
+    max_visible?: number;
+    is_enabled?: boolean;
+  }) {
+    return this.request('/highlights/settings/', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  validateDriveUrl(url: string, mediaType: 'image' | 'video' = 'image') {
+    return this.request('/highlights/validate-drive-url/', {
+      method: 'POST',
+      body: JSON.stringify({ url, media_type: mediaType }),
+    });
+  }
 }
 
 export const api = new ApiClient();

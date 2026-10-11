@@ -17,6 +17,7 @@ export interface User {
   is_superuser?: boolean;
   can_manage_calendar?: boolean;
   can_manage_users?: boolean;
+  can_manage_highlights?: boolean;
   role_names?: string[];
   role_ids?: string[];
   permissions_list?: string[];
