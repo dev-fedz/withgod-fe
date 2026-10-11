@@ -29,6 +29,7 @@ interface VideoHighlightRowProps {
 }
 
 const VideoHighlightRow: React.FC<VideoHighlightRowProps> = ({ highlight }) => {
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const embedUrl =
     highlight.embed_url ||
     (highlight.drive_file_id
@@ -36,51 +37,176 @@ const VideoHighlightRow: React.FC<VideoHighlightRowProps> = ({ highlight }) => {
       : '');
 
   return (
-    <section
-      aria-label={`Video Highlight: ${highlight.title}`}
-      className="relative overflow-hidden rounded-3xl bg-stone-950 border border-stone-200/80 dark:border-stone-800 shadow-xl group select-none"
-    >
-      {/* Top Header Bar */}
-      <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-stone-900/90 border-b border-stone-800 flex items-center justify-between gap-2 sm:gap-3">
-        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
-          <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold bg-amber-500 text-stone-950 shadow-sm shrink-0">
-            <Film className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Featured Video</span>
-            <span className="sm:hidden">Video</span>
-          </span>
-          <h3 className="text-xs sm:text-sm md:text-base font-bold text-white truncate">
-            {highlight.title}
-          </h3>
-        </div>
-      </div>
+    <>
+      <section
+        aria-label={`Video Highlight: ${highlight.title}`}
+        className="relative overflow-hidden rounded-3xl bg-stone-950 border border-stone-200/80 dark:border-stone-800 shadow-xl group select-none"
+      >
+        {/* Top Header Bar */}
+        <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-stone-900/90 border-b border-stone-800 flex items-center justify-between gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+            <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold bg-amber-500 text-stone-950 shadow-sm shrink-0">
+              <Film className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Featured Video</span>
+              <span className="sm:hidden">Video</span>
+            </span>
+            <h3 className="text-xs sm:text-sm md:text-base font-bold text-white truncate">
+              {highlight.title}
+            </h3>
+          </div>
 
-      {/* Embedded Video Canvas - Same method as Edit Highlight modal */}
-      <div className="relative w-full h-[280px] sm:h-[400px] md:h-[480px] bg-black flex items-center justify-center overflow-hidden">
-        {embedUrl ? (
-          <iframe
-            src={embedUrl}
-            title={highlight.title}
-            className="w-full h-full border-0"
-            allow="autoplay; fullscreen"
-            allowFullScreen
-          />
-        ) : (
-          <div className="flex flex-col items-center justify-center p-6 text-center text-stone-400">
-            <Film className="w-10 h-10 mb-2 opacity-50" />
-            <p className="text-xs">No video URL available</p>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Fullscreen Lightbox Button */}
+            <button
+              type="button"
+              onClick={() => setIsLightboxOpen(true)}
+              aria-label="View Fullscreen Video"
+              className="w-8 h-8 rounded-xl bg-stone-800/90 hover:bg-stone-700 text-stone-300 hover:text-white flex items-center justify-center transition-colors border border-stone-700/60"
+              title="Expand Fullscreen Video"
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
+            </button>
+
+            {/* Google Drive Link */}
+            {highlight.drive_url && (
+              <a
+                href={highlight.drive_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-stone-800/90 hover:bg-stone-700 text-stone-300 hover:text-white transition-colors border border-stone-700/60"
+                title="Open in Google Drive"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Drive</span>
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Embedded Video Canvas - Responsive 16:9 aspect ratio */}
+        <div className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
+          {embedUrl ? (
+            <>
+              <iframe
+                src={embedUrl}
+                title={highlight.title}
+                className="w-full h-full border-0"
+                allow="autoplay; fullscreen"
+                allowFullScreen
+              />
+              {/* Overlay blocker for Google Drive popout icon to prevent accidental external redirects on mobile */}
+              <div
+                className="absolute top-0 right-0 w-16 h-12 z-10 pointer-events-auto cursor-default"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                title="Watch inside Shema"
+              />
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center p-6 text-center text-stone-400">
+              <Film className="w-10 h-10 mb-2 opacity-50" />
+              <p className="text-xs">No video URL available</p>
+            </div>
+          )}
+        </div>
+
+        {/* Description Footer Bar */}
+        {highlight.description && (
+          <div className="p-4 sm:p-5 bg-stone-900 border-t border-stone-800">
+            <p className="text-xs sm:text-sm text-stone-300 font-serif leading-relaxed">
+              {highlight.description}
+            </p>
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Description Footer Bar */}
-      {highlight.description && (
-        <div className="p-4 sm:p-5 bg-stone-900 border-t border-stone-800">
-          <p className="text-xs sm:text-sm text-stone-300 font-serif leading-relaxed">
-            {highlight.description}
-          </p>
-        </div>
-      )}
-    </section>
+      {/* Interactive Fullscreen Video Modal */}
+      <AnimatePresence>
+        {isLightboxOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col justify-between p-3 sm:p-6"
+            onClick={() => setIsLightboxOpen(false)}
+          >
+            {/* Modal Header */}
+            <div
+              className="flex items-center justify-between z-10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2 text-white min-w-0 flex-1 mr-3">
+                <span className="px-2.5 py-1 rounded-lg bg-amber-500 text-stone-950 text-xs font-black uppercase shrink-0">
+                  Video
+                </span>
+                <span className="text-sm font-bold text-stone-200 truncate">
+                  {highlight.title}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {highlight.drive_url && (
+                  <a
+                    href={highlight.drive_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors border border-stone-700/60"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="hidden sm:inline">Open in Drive</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsLightboxOpen(false)}
+                  aria-label="Close fullscreen video"
+                  className="w-9 h-9 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white flex items-center justify-center transition-colors border border-stone-700/60"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Video Canvas */}
+            <div
+              className="relative flex-1 flex items-center justify-center p-1 sm:p-4 my-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="relative w-full max-w-5xl aspect-video rounded-2xl overflow-hidden shadow-2xl border border-stone-800 bg-black">
+                <iframe
+                  src={embedUrl}
+                  title={highlight.title}
+                  className="w-full h-full border-0"
+                  allow="autoplay; fullscreen"
+                  allowFullScreen
+                />
+                <div
+                  className="absolute top-0 right-0 w-16 h-12 z-10 pointer-events-auto cursor-default"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Modal Caption */}
+            {highlight.description && (
+              <div
+                className="text-center py-2 z-10"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p className="text-xs sm:text-sm text-stone-400 max-w-xl mx-auto font-serif">
+                  {highlight.description}
+                </p>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 };
 // ============================================================================
