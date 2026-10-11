@@ -33,6 +33,9 @@ export interface User {
   };
 }
 
+export type SystemFontSize = 'small' | 'medium' | 'large' | 'xlarge';
+export type SystemFontFamily = 'sans' | 'serif';
+
 interface AppContextType {
   user: User | null;
   isAuthenticated: boolean;
@@ -52,6 +55,10 @@ interface AppContextType {
   setCurrentChapter: (ch: number) => void;
   theme: 'light' | 'dark';
   toggleTheme: () => void;
+  fontSize: SystemFontSize;
+  setFontSize: (size: SystemFontSize) => void;
+  fontFamily: SystemFontFamily;
+  setFontFamily: (family: SystemFontFamily) => void;
   geminiApiKey: string;
   setGeminiApiKey: (key: string) => void;
   isAiModalOpen: boolean;
@@ -125,6 +132,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // System-wide Font Size & Typography for ease of reading
+  const [fontSize, setFontSizeState] = useState<SystemFontSize>('medium');
+  const [fontFamily, setFontFamilyState] = useState<SystemFontFamily>('sans');
+
+  const applyFontSize = (size: SystemFontSize) => {
+    if (typeof window === 'undefined') return;
+    const sizeMap: Record<SystemFontSize, string> = {
+      small: '87.5%', // 14px
+      medium: '100%', // 16px default
+      large: '112.5%', // 18px comfortable
+      xlarge: '125%', // 20px easy-read / high legibility
+    };
+    document.documentElement.style.fontSize = sizeMap[size] || '100%';
+    document.documentElement.setAttribute('data-font-size', size);
+    localStorage.setItem('withgod_font_size', size);
+  };
+
+  const applyFontFamily = (family: SystemFontFamily) => {
+    if (typeof window === 'undefined') return;
+    document.documentElement.setAttribute('data-font-family', family);
+    localStorage.setItem('withgod_font_family', family);
+  };
+
+  const setFontSize = (size: SystemFontSize) => {
+    setFontSizeState(size);
+    applyFontSize(size);
+    if (api.getAccessToken()) {
+      api.updatePreferences({ font_size: size }).catch((err) => {
+        console.warn('Failed to sync font size preference to server:', err);
+      });
+    }
+  };
+
+  const setFontFamily = (family: SystemFontFamily) => {
+    setFontFamilyState(family);
+    applyFontFamily(family);
+  };
+
   const refreshUser = async () => {
     try {
       const data = await api.getMe();
@@ -142,21 +187,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      // Also load system settings (e.g. admin-configured Gemini API key)
-      try {
-        const sysSettings = await api.getSystemSettings();
-        if (sysSettings?.gemini_api_key) {
-          setGeminiApiKeyState(sysSettings.gemini_api_key);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('withgod_gemini_api_key', sysSettings.gemini_api_key);
-          }
-        }
-      } catch {}
+      if (data.preference?.font_size) {
+        const validSize = (['small', 'medium', 'large', 'xlarge'].includes(data.preference.font_size)
+          ? data.preference.font_size
+          : 'medium') as SystemFontSize;
+        setFontSizeState(validSize);
+        applyFontSize(validSize);
+      }
     } catch {
       setUser(null);
     } finally {
       setIsLoading(false);
     }
+
+    // Also load system settings (e.g. admin-configured Gemini API key) for all users, including guests
+    try {
+      const sysSettings = await api.getSystemSettings();
+      if (sysSettings?.gemini_api_key) {
+        setGeminiApiKeyState(sysSettings.gemini_api_key);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('withgod_gemini_api_key', sysSettings.gemini_api_key);
+        }
+      }
+    } catch {}
   };
 
   const setGeminiApiKey = (key: string) => {
@@ -197,11 +250,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!isNaN(parsed)) setCurrentChapterState(parsed);
     }
 
+    // Restore System Font Size & Family immediately from localStorage
+    const savedFontSize = (localStorage.getItem('withgod_font_size') as SystemFontSize) || 'medium';
+    setFontSizeState(savedFontSize);
+    applyFontSize(savedFontSize);
+
+    const savedFontFamily = (localStorage.getItem('withgod_font_family') as SystemFontFamily) || 'sans';
+    setFontFamilyState(savedFontFamily);
+    applyFontFamily(savedFontFamily);
+
     // Restore Gemini API Key
     const savedGeminiKey = localStorage.getItem('withgod_gemini_api_key');
     if (savedGeminiKey) {
       setGeminiApiKeyState(savedGeminiKey);
     }
+
+    // Load system settings (e.g. admin-configured Gemini API key) for all users, including guests
+    api.getSystemSettings().then((sysSettings) => {
+      if (sysSettings?.gemini_api_key) {
+        setGeminiApiKeyState(sysSettings.gemini_api_key);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('withgod_gemini_api_key', sysSettings.gemini_api_key);
+        }
+      }
+    }).catch(() => {});
 
     refreshUser();
   }, []);
@@ -221,6 +293,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (savedVer) {
         api.updatePreferences({ preferred_translation: savedVer }).catch(() => {});
       }
+    }
+
+    // Restore font size from user account preferences
+    if (loggedInUser.preference?.font_size) {
+      const validSize = (['small', 'medium', 'large', 'xlarge'].includes(loggedInUser.preference.font_size)
+        ? loggedInUser.preference.font_size
+        : 'medium') as SystemFontSize;
+      setFontSizeState(validSize);
+      applyFontSize(validSize);
     }
     // Also load system settings for Gemini API key
     api.getSystemSettings().then((sysSettings) => {
@@ -335,6 +416,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentChapter,
         theme,
         toggleTheme,
+        fontSize,
+        setFontSize,
+        fontFamily,
+        setFontFamily,
         geminiApiKey,
         setGeminiApiKey,
         isAiModalOpen,

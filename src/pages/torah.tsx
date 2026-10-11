@@ -23,6 +23,7 @@ import PageLayout from '../components/PageLayout';
 import { Modal } from '../components/Modal';
 import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
+import { getDownloadedBibleVersions } from '../utils/bibleUtils';
 
 const HIGHLIGHT_COLORS = [
   { id: 'yellow', label: 'Yellow', bg: '#FEF9C3', darkBg: 'rgba(234, 179, 8, 0.22)', dot: '#EAB308' },
@@ -55,7 +56,38 @@ export default function TorahPage() {
   const [readingsData, setReadingsData] = useState<any>(null);
   const [isLoadingReadings, setIsLoadingReadings] = useState(false);
   const [versions, setVersions] = useState<any[]>([]);
+  const [downloadedVersions, setDownloadedVersions] = useState<string[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<string>(currentVersion || 'KJV');
+
+  // Load downloaded versions from storage
+  useEffect(() => {
+    setDownloadedVersions(getDownloadedBibleVersions());
+  }, []);
+
+  // Filter versions to only downloaded Bible versions (Mobile Parity)
+  const selectableTorahVersions = React.useMemo(() => {
+    if (!versions || versions.length === 0) return [];
+    if (downloadedVersions.length === 0) return versions;
+    const downloadedUpper = downloadedVersions.map((v) => v.toUpperCase());
+    const filtered = versions.filter((v: any) =>
+      downloadedUpper.includes((v.id || '').toUpperCase())
+    );
+    return filtered.length > 0 ? filtered : versions;
+  }, [versions, downloadedVersions]);
+
+  // Ensure selectedVersion is among selectable versions
+  useEffect(() => {
+    if (
+      selectableTorahVersions.length > 0 &&
+      !selectableTorahVersions.some(
+        (v: any) => v.id.toUpperCase() === selectedVersion.toUpperCase()
+      )
+    ) {
+      const fallback = selectableTorahVersions[0].id;
+      setSelectedVersion(fallback);
+      setCurrentVersion(fallback);
+    }
+  }, [selectableTorahVersions, selectedVersion, setCurrentVersion]);
 
   // Filter & Search state
   const [selectedBook, setSelectedBook] = useState('all');
@@ -310,10 +342,10 @@ export default function TorahPage() {
     setIsLoadingCompare(true);
 
     try {
-      const otherVersions = versions
-        .map((v: any) => v.id)
+      const downloaded = getDownloadedBibleVersions();
+      const otherVersions = downloaded
         .filter((id: string) => id.toUpperCase() !== selectedVersion.toUpperCase());
-      const versionsToCompare = otherVersions.length > 0 ? otherVersions : ['KJV'];
+      const versionsToCompare = otherVersions.length > 0 ? otherVersions : [selectedVersion];
       const res = await api.compareVerses(versionsToCompare, seg.book, seg.chapter, selVs);
       setCompareData(Array.isArray(res) ? res : res?.comparisons || []);
     } catch (err) {
@@ -485,9 +517,9 @@ export default function TorahPage() {
                 className="text-xs font-semibold px-3 py-2 rounded-xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 cursor-pointer"
               >
                 {/* Tagalog Group */}
-                {versions.some((v: any) => v.language === 'tl') && (
+                {selectableTorahVersions.some((v: any) => v.language === 'tl') && (
                   <optgroup label="Tagalog Versions">
-                    {versions
+                    {selectableTorahVersions
                       .filter((v: any) => v.language === 'tl')
                       .map((ver: any) => (
                         <option key={ver.id} value={ver.id}>
@@ -498,9 +530,9 @@ export default function TorahPage() {
                 )}
 
                 {/* English Group */}
-                {versions.some((v: any) => v.language !== 'tl') && (
+                {selectableTorahVersions.some((v: any) => v.language !== 'tl') && (
                   <optgroup label="English Versions">
-                    {versions
+                    {selectableTorahVersions
                       .filter((v: any) => v.language !== 'tl')
                       .map((ver: any) => (
                         <option key={ver.id} value={ver.id}>
@@ -878,7 +910,7 @@ export default function TorahPage() {
 
       {/* Floating Selection Toolbar (Mobile Parity: Highlights & Actions) */}
       {currentSelectedVerses.length > 0 && currentActiveSeg && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl shadow-2xl border border-stone-200/80 dark:border-stone-800 p-3 px-5 max-w-sm w-[92%]">
+        <div className="fixed bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-50 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl shadow-2xl border border-stone-200/80 dark:border-stone-800 p-3 px-5 max-w-sm w-[92%]">
           {/* Header / Selection Info */}
           <div className="flex items-center justify-between pb-2 mb-2 border-b border-stone-100 dark:border-stone-800 text-xs">
             <span className="font-semibold text-stone-800 dark:text-stone-200">

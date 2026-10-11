@@ -103,11 +103,32 @@ export default function ChatPage() {
   const [addingMembers, setAddingMembers] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const pollingRef = useRef<any>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (smooth = true) => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+      });
+    }
   };
+
+  useEffect(() => {
+    if (activeConv) {
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      }
+      scrollToBottom(false);
+    }
+  }, [activeConv?.id]);
+
+  useEffect(() => {
+    if (activeConv) {
+      scrollToBottom(true);
+    }
+  }, [messages]);
 
   const getDirectoryUserName = (u: DirectoryUser): string => {
     return (
@@ -409,7 +430,7 @@ export default function ChatPage() {
         <title>Chats | Shema Bible & Journal</title>
       </Head>
 
-      <div className="h-[calc(100vh-8rem)] flex flex-col md:flex-row bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden shadow-sm">
+      <div className="h-[calc(100dvh-8rem)] md:h-[calc(100vh-8rem)] flex flex-col md:flex-row bg-white dark:bg-stone-900 rounded-none md:rounded-2xl border-0 md:border border-stone-200 dark:border-stone-800 overflow-hidden shadow-sm">
         {/* Left Sidebar: Conversations List */}
         <div
           className={`w-full md:w-80 lg:w-96 flex flex-col border-r border-stone-200 dark:border-stone-800 ${
@@ -539,18 +560,25 @@ export default function ChatPage() {
 
         {/* Right Area: Active Chat Room */}
         <div
-          className={`flex-1 flex flex-col bg-stone-50/40 dark:bg-stone-950/30 ${
+          className={`flex-1 min-h-0 flex flex-col bg-stone-50/40 dark:bg-stone-950/30 overflow-hidden ${
             !activeConv ? 'hidden md:flex' : 'flex'
           }`}
         >
           {activeConv ? (
             <>
               {/* Active Room Header */}
-              <div className="p-3 px-4 bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
+              <div className="sticky top-0 z-20 shrink-0 p-3 px-4 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
                   <button
-                    onClick={() => setActiveConv(null)}
-                    className="md:hidden p-1.5 -ml-1 text-stone-500 hover:text-stone-900 dark:hover:text-stone-100"
+                    type="button"
+                    onClick={() => {
+                      setActiveConv(null);
+                      if (typeof window !== 'undefined') {
+                        window.scrollTo({ top: 0, behavior: 'instant' });
+                      }
+                    }}
+                    className="md:hidden p-2 -ml-2 text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 rounded-xl hover:bg-stone-100 dark:hover:bg-stone-800 active:scale-95 transition-all cursor-pointer"
+                    aria-label="Back to conversations"
                   >
                     <ArrowLeft className="w-5 h-5" />
                   </button>
@@ -628,7 +656,7 @@ export default function ChatPage() {
               )}
 
               {/* Messages Container */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-3">
+              <div ref={messagesContainerRef} className="flex-1 min-h-0 p-4 overflow-y-auto space-y-3">
                 {loadingMessages ? (
                   <div className="text-center py-10 text-xs text-stone-400">Loading messages...</div>
                 ) : messages.length === 0 ? (
@@ -675,7 +703,7 @@ export default function ChatPage() {
               {/* Message Input Box */}
               <form
                 onSubmit={handleSendMessage}
-                className="p-3 bg-white dark:bg-stone-900 border-t border-stone-200 dark:border-stone-800 flex items-center gap-2"
+                className="shrink-0 p-3 bg-white dark:bg-stone-900 border-t border-stone-200 dark:border-stone-800 flex items-center gap-2"
               >
                 <input
                   type="text"

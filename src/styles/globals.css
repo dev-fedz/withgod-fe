@@ -10,6 +10,7 @@
     --bg-surface: #FFFFFF;
     --text-primary: #1C1917;
     --text-secondary: #78716C;
+    --app-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .dark {
@@ -21,13 +22,47 @@
 
   html {
     scrollbar-gutter: stable;
+    font-size: 100%;
+    transition: font-size 0.15s ease;
+  }
+
+  /* Root Font Size scaling for system-wide readability */
+  html[data-font-size="small"] {
+    font-size: 87.5%; /* 14px */
+  }
+
+  html[data-font-size="medium"] {
+    font-size: 100%; /* 16px default */
+  }
+
+  html[data-font-size="large"] {
+    font-size: 112.5%; /* 18px */
+  }
+
+  html[data-font-size="xlarge"] {
+    font-size: 125%; /* 20px */
+  }
+
+  /* System Font Family options */
+  html[data-font-family="serif"] {
+    --app-font-family: 'Lora', Georgia, 'Times New Roman', serif;
+  }
+
+  html[data-font-family="sans"] {
+    --app-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   body {
     background-color: var(--bg-primary);
     color: var(--text-primary);
+    font-family: var(--app-font-family);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-tap-highlight-color: transparent;
+  }
+
+  html[data-font-family="serif"],
+  html[data-font-family="serif"] body {
+    font-family: 'Lora', Georgia, 'Times New Roman', serif;
   }
 }
 
