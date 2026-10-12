@@ -30,11 +30,37 @@ interface VideoHighlightRowProps {
 
 const VideoHighlightRow: React.FC<VideoHighlightRowProps> = ({ highlight }) => {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [streamFailed, setStreamFailed] = useState(false);
+  const rowVideoRef = useRef<HTMLVideoElement>(null);
+  const modalVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Compute direct stream URL if available
+  const streamUrl = React.useMemo(() => {
+    if (highlight.stream_url) {
+      if (highlight.stream_url.startsWith('http://') || highlight.stream_url.startsWith('https://')) {
+        return highlight.stream_url;
+      }
+      const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api').replace(/\/api\/?$/, '');
+      return `${baseUrl}${highlight.stream_url.startsWith('/') ? highlight.stream_url : `/${highlight.stream_url}`}`;
+    }
+    if (highlight.drive_file_id) {
+      const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api').replace(/\/api\/?$/, '');
+      return `${baseUrl}/api/highlights/stream/${highlight.drive_file_id}/`;
+    }
+    return '';
+  }, [highlight.stream_url, highlight.drive_file_id]);
+
   const embedUrl =
     highlight.embed_url ||
     (highlight.drive_file_id
       ? `https://drive.google.com/file/d/${highlight.drive_file_id}/preview`
       : '');
+
+  const posterUrl =
+    highlight.thumbnail_url ||
+    (highlight.drive_file_id
+      ? `https://drive.google.com/thumbnail?id=${highlight.drive_file_id}&sz=w1200`
+      : undefined);
 
   return (
     <>
@@ -59,7 +85,12 @@ const VideoHighlightRow: React.FC<VideoHighlightRowProps> = ({ highlight }) => {
             {/* Fullscreen Lightbox Button */}
             <button
               type="button"
-              onClick={() => setIsLightboxOpen(true)}
+              onClick={() => {
+                if (rowVideoRef.current && !rowVideoRef.current.paused) {
+                  rowVideoRef.current.pause();
+                }
+                setIsLightboxOpen(true);
+              }}
               aria-label="View Fullscreen Video"
               className="w-8 h-8 rounded-xl bg-stone-800/90 hover:bg-stone-700 text-stone-300 hover:text-white flex items-center justify-center transition-colors border border-stone-700/60"
               title="Expand Fullscreen Video"
@@ -84,8 +115,21 @@ const VideoHighlightRow: React.FC<VideoHighlightRowProps> = ({ highlight }) => {
         </div>
 
         {/* Embedded Video Canvas - Responsive 16:9 aspect ratio */}
-        <div className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
-          {embedUrl ? (
+        <div className="highlight-video-container relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
+          {streamUrl && !streamFailed ? (
+            <video
+              ref={rowVideoRef}
+              src={streamUrl}
+              poster={posterUrl}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full h-full object-cover object-center"
+              onError={() => setStreamFailed(true)}
+            >
+              Your browser does not support the video tag.
+            </video>
+          ) : embedUrl ? (
             <>
               <iframe
                 src={embedUrl}
@@ -174,21 +218,42 @@ const VideoHighlightRow: React.FC<VideoHighlightRowProps> = ({ highlight }) => {
               className="relative flex-1 flex items-center justify-center p-1 sm:p-4 my-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="relative w-full max-w-5xl aspect-video rounded-2xl overflow-hidden shadow-2xl border border-stone-800 bg-black">
-                <iframe
-                  src={embedUrl}
-                  title={highlight.title}
-                  className="w-full h-full border-0"
-                  allow="autoplay; fullscreen"
-                  allowFullScreen
-                />
-                <div
-                  className="absolute top-0 right-0 w-16 h-12 z-10 pointer-events-auto cursor-default"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                />
+              <div className="highlight-video-container relative w-full max-w-5xl aspect-video rounded-2xl overflow-hidden shadow-2xl border border-stone-800 bg-black">
+                {streamUrl && !streamFailed ? (
+                  <video
+                    ref={modalVideoRef}
+                    src={streamUrl}
+                    poster={posterUrl}
+                    controls
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-contain object-center"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                ) : embedUrl ? (
+                  <>
+                    <iframe
+                      src={embedUrl}
+                      title={highlight.title}
+                      className="w-full h-full border-0"
+                      allow="autoplay; fullscreen"
+                      allowFullScreen
+                    />
+                    <div
+                      className="absolute top-0 right-0 w-16 h-12 z-10 pointer-events-auto cursor-default"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                    />
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-6 text-center text-stone-400">
+                    <Film className="w-10 h-10 mb-2 opacity-50" />
+                    <p className="text-xs">No video URL available</p>
+                  </div>
+                )}
               </div>
             </div>
 
